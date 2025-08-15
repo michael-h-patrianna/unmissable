@@ -1,0 +1,54 @@
+# Xcode
+.build/
+.swiftpm/
+*.xcworkspace/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+.DS_Store
+
+# Swift Package Manager
+/.build
+/Packages
+Package.pins
+Package.resolved
+xcuserdata/
+
+# Xcode automatically generated files
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+
+# CocoaPods
+Pods/
+
+# Carthage
+Carthage/Build/
+
+# Temporary files
+*.tmp
+*~.nib
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Local environment files
+.env
+.env.local
+
+# Build artifacts
+*.app
+*.ipa
