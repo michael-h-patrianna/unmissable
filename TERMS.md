@@ -60,7 +60,7 @@ We may update these terms as needed. Continued use constitutes acceptance of cha
 ## Contact
 
 Questions about these terms:
-- **Email:** michael.h.patrianna@gmail.com
+- **Email:** winningplayer@gmail.com
 - **Project:** <https://github.com/michael-h-patrianna/unmissable>
 
 ---

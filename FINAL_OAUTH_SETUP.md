@@ -28,7 +28,7 @@ git push origin main
 
 **App Information:**
 - **App name**: `Unmissable`
-- **User support email**: `michael.h.patrianna@gmail.com`
+- **User support email**: `winningplayer@gmail.com`
 
 **App domain:**
 - **Application home page**: `https://github.com/michael-h-patrianna/unmissable`
@@ -36,7 +36,7 @@ git push origin main
 - **Application terms of service link**: `https://github.com/michael-h-patrianna/unmissable/blob/main/TERMS.md`
 
 **Developer contact information:**
-- **Email addresses**: `michael.h.patrianna@gmail.com`
+- **Email addresses**: `winningplayer@gmail.com`
 
 ### Step 3: Set Publishing Status
 
@@ -47,7 +47,7 @@ git push origin main
 
 1. Click **Test users** section
 2. Click **Add Users**
-3. Add: `michael.h.patrianna@gmail.com`
+3. Add: `winningplayer@gmail.com`
 4. Click **Save**
 
 ### Step 5: Configure Scopes
