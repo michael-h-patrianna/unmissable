@@ -20,7 +20,34 @@ class OAuth2Service: ObservableObject {
 
   init() {
     loadAuthStateFromKeychain()
+    
+    // Listen for OAuth callback notifications
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleOAuthCallback(_:)),
+      name: Notification.Name("OAuthCallback"),
+      object: nil
+    )
   }
+  
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+  }
+  
+  @objc private func handleOAuthCallback(_ notification: Notification) {
+    guard let url = notification.object as? URL else { return }
+    
+    logger.info("Handling OAuth callback URL: \(url)")
+    
+    // Handle the callback URL with AppAuth
+    if let currentAuthFlow = self.currentAuthorizationFlow {
+      if currentAuthFlow.resumeExternalUserAgentFlow(with: url) {
+        self.currentAuthorizationFlow = nil
+      }
+    }
+  }
+  
+  private var currentAuthorizationFlow: OIDExternalUserAgentSession?
 
   // MARK: - Public Interface
 
@@ -57,23 +84,23 @@ class OAuth2Service: ObservableObject {
 
     // Perform authorization request
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      // Create a temporary window for authorization
-      let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 400, height: 600),
-        styleMask: [.titled, .closable, .resizable],
+      // Use external user agent (browser) for authorization
+      // Create a minimal window as fallback if no key window exists
+      let fallbackWindow = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
+        styleMask: .borderless,
         backing: .buffered,
         defer: false
       )
-      window.title = "Google Calendar Authorization"
-      window.center()
-
-      OIDAuthorizationService.present(
+      let presentingWindow = NSApplication.shared.keyWindow ?? fallbackWindow
+      let userAgent = OIDExternalUserAgentMac(presenting: presentingWindow)
+      
+      self.currentAuthorizationFlow = OIDAuthorizationService.present(
         request,
-        presenting: window
+        externalUserAgent: userAgent
       ) { [weak self] authorizationResponse, error in
         Task { @MainActor in
-          // Close the temporary window
-          window.close()
+          self?.currentAuthorizationFlow = nil
 
           if let error = error {
             self?.logger.error("Authorization failed: \(error.localizedDescription)")

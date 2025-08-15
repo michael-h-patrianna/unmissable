@@ -17,7 +17,7 @@ struct GoogleCalendarConfig {
   // For development, these are placeholder values that need to be replaced
   static let clientId = "833157900285-2l03i5lgpp7u5ci6912o17ut0o8ubupl.apps.googleusercontent.com"
   static let redirectScheme = "com.unmissable.app"
-  static let redirectURI = "\(redirectScheme)://oauth/callback"
+  static let redirectURI = "\(redirectScheme):/"
 
   // API Base URLs
   static let calendarAPIBaseURL = "https://www.googleapis.com/calendar/v3"

@@ -11,6 +11,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Hide dock icon for menu bar only app
     NSApp.setActivationPolicy(.accessory)
 
+    // Register URL scheme handler
+    NSAppleEventManager.shared().setEventHandler(
+      self,
+      andSelector: #selector(handleURLEvent(_:withReplyEvent:)),
+      forEventClass: AEEventClass(kInternetEventClass),
+      andEventID: AEEventID(kAEGetURL)
+    )
+
     // Request necessary permissions on first launch
     requestPermissions()
   }
@@ -26,6 +34,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
     }
     return true
+  }
+
+  @objc func handleURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+    guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+          let url = URL(string: urlString) else {
+      logger.error("Failed to parse URL from Apple Event")
+      return
+    }
+    
+    logger.info("Received URL: \(urlString)")
+    
+    // Handle OAuth callback using bundle ID scheme
+    if url.scheme == "com.unmissable.app" {
+      NotificationCenter.default.post(
+        name: Notification.Name("OAuthCallback"),
+        object: url
+      )
+    }
   }
 
   private func requestPermissions() {

@@ -57,8 +57,9 @@ These connections are governed by Google's privacy policies.
 ## Contact
 
 For privacy questions or concerns:
-- **Email:** winningplayer@gmail.com
-- **Project:** https://github.com/michael-h-patrianna/unmissable
+
+- **Project**: <https://github.com/michael-h-patrianna/unmissable>
+- **Issues**: Submit via GitHub Issues
 
 ## Changes
 

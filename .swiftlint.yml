@@ -1,0 +1,49 @@
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - first_where
+  - modifier_order
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - unneeded_parentheses_in_closure_argument
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - .swiftpm
+  - Package.swift
+
+line_length:
+  warning: 120
+  error: 150
+
+identifier_name:
+  min_length: 1
+  max_length:
+    warning: 50
+    error: 60
+
+type_name:
+  min_length: 3
+  max_length:
+    warning: 40
+    error: 50
+
+function_body_length:
+  warning: 50
+  error: 100
+
+type_body_length:
+  warning: 200
+  error: 300
+
+cyclomatic_complexity:
+  warning: 10
+  error: 20

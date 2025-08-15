@@ -60,8 +60,9 @@ We may update these terms as needed. Continued use constitutes acceptance of cha
 ## Contact
 
 Questions about these terms:
-- **Email:** winningplayer@gmail.com
-- **Project:** <https://github.com/michael-h-patrianna/unmissable>
+
+- **Project**: <https://github.com/michael-h-patrianna/unmissable>
+- **Issues**: Submit via GitHub Issues
 
 ---
 

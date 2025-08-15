@@ -1,0 +1,15 @@
+--swiftversion 5.10
+--indent 4
+--indentcase false
+--trimwhitespace always
+--commas always
+--semicolons never
+--linebreaks lf
+--maxwidth 120
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--closingparen balanced
+--funcattributes prev-line
+--typeattributes prev-line
+--varattributes prev-line
