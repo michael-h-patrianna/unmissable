@@ -19,6 +19,50 @@ A macOS app that ensures you never miss important meetings by showing an unmissa
 
 - macOS 14.0 (Sonoma) or later
 - Swift 5.10+
+
+## Setup
+
+### 🔒 OAuth Configuration (Required)
+
+This app requires Google Calendar API access. Choose one of these secure configuration methods:
+
+#### Option 1: Environment Variable (Recommended)
+
+1. **Get Google OAuth credentials:**
+   - Visit [Google Cloud Console](https://console.developers.google.com/)
+   - Create a new project or select existing project  
+   - Enable the Google Calendar API
+   - Create OAuth 2.0 credentials (Desktop application)
+   - Copy the Client ID
+
+2. **Set environment variable:**
+
+   ```bash
+   export GOOGLE_OAUTH_CLIENT_ID="your-client-id-here"
+   ```
+
+3. **Build and run:**
+
+   ```bash
+   swift build && swift run
+   ```
+
+#### Option 2: Config.plist File
+
+1. **Copy the configuration template:**
+
+   ```bash
+   cp Sources/Unmissable/Config/Config.plist.example Sources/Unmissable/Config/Config.plist
+   ```
+
+2. **Configure your credentials:**
+   - Open `Sources/Unmissable/Config/Config.plist`
+   - Replace `YOUR_GOOGLE_OAUTH_CLIENT_ID_HERE` with your actual client ID
+   - Save the file
+
+3. **Add to Xcode project resources** (if using Xcode)
+
+**⚠️ Security Note:** Never commit OAuth credentials to version control. Both `Config.plist` and environment variables are secure for local development.
 - Xcode 15+
 
 ## Development Setup

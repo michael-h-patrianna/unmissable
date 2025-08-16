@@ -16,6 +16,10 @@ Package.pins
 Package.resolved
 xcuserdata/
 
+# Configuration files with secrets
+Config.plist
+Sources/Unmissable/Config.plist
+
 # Xcode automatically generated files
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
