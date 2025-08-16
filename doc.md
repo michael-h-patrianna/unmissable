@@ -71,8 +71,6 @@ Sources/Unmissable/
 │   ├── Event.swift                  # Meeting event data model
 │   ├── Provider.swift               # Meeting provider enum (Meet, Zoom, etc.)
 │   └── ScheduledAlert.swift         # Alert scheduling data model
-├── Config/                 # Configuration templates
-│   └── Config.plist.example         # OAuth configuration template (example)
 ├── Models/                 # Data models
 │   ├── CalendarInfo.swift           # Calendar metadata model
 │   ├── Event.swift                  # Meeting event data model
@@ -80,6 +78,12 @@ Sources/Unmissable/
 │   └── ScheduledAlert.swift         # Alert scheduling data model
 ├── GoogleCalendarConfig.swift       # OAuth configuration loader (secure)
 └── Resources/              # App resources (sounds, assets)
+```
+
+**Configuration Files (Project Root):**
+```
+Config.plist.example                 # OAuth configuration template (committed)
+Config.plist                         # OAuth configuration with secrets (gitignored)
 ```
 
 ## DEPENDENCIES (Package.swift)

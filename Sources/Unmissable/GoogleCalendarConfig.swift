@@ -15,7 +15,7 @@ struct GoogleCalendarConfig {
 
   // MARK: - Secure Configuration Loading
   
-  /// OAuth Client ID - loads from environment variable or Config.plist
+  /// OAuth Client ID - loads from environment variable or Config.plist (in project root)
   /// This prevents committing sensitive credentials to git
   static let clientId: String = {
     // Try environment variable first (for development/CI)
@@ -25,10 +25,10 @@ struct GoogleCalendarConfig {
       return envClientId
     }
     
-    // Try loading from Config.plist (for local development)
-    if let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
-       let plist = NSDictionary(contentsOfFile: path) as? [String: Any],
-       let clientId = plist["GoogleOAuthClientID"] as? String,
+    // Try loading from Config.plist in project root (for local development)
+    // This works for both debug and release builds when Config.plist is in project root
+    if let configData = loadConfigFromProjectRoot(),
+       let clientId = configData["GoogleOAuthClientID"] as? String,
        !clientId.isEmpty,
        !clientId.contains("YOUR_GOOGLE_OAUTH_CLIENT_ID") {
       return clientId
@@ -40,19 +40,18 @@ struct GoogleCalendarConfig {
       
       📋 SETUP OPTIONS:
       
-      Option 1 - Environment Variable (Recommended for development):
+      Option 1 - Environment Variable (Recommended for CI/deployment):
       export GOOGLE_OAUTH_CLIENT_ID="your-client-id-here"
       
-      Option 2 - Config.plist file:
-      1. Copy: Sources/Unmissable/Config/Config.plist.example
-      2. To: Sources/Unmissable/Config/Config.plist
-      3. Replace YOUR_GOOGLE_OAUTH_CLIENT_ID with your actual client ID
-      4. Add Config.plist to your Xcode project resources
+      Option 2 - Config.plist in project root (Recommended for local development):
+      1. Copy: Config.plist.example → Config.plist (in project root)
+      2. Edit Config.plist and replace YOUR_GOOGLE_OAUTH_CLIENT_ID with your actual client ID
+      3. Config.plist will work for both debug and release builds automatically
       
       🔗 GET CLIENT ID: https://console.developers.google.com/
       
       🔒 SECURITY: Config.plist is excluded from git via .gitignore
-      Environment variables are secure for local development
+      Environment variables are secure for CI/deployment
       """)
   }()
   
@@ -63,10 +62,9 @@ struct GoogleCalendarConfig {
       return envScheme
     }
     
-    // Try Config.plist
-    if let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
-       let plist = NSDictionary(contentsOfFile: path) as? [String: Any],
-       let scheme = plist["RedirectScheme"] as? String,
+    // Try Config.plist in project root
+    if let configData = loadConfigFromProjectRoot(),
+       let scheme = configData["RedirectScheme"] as? String,
        !scheme.isEmpty {
       return scheme
     }
@@ -88,6 +86,43 @@ struct GoogleCalendarConfig {
   
   static var isDevelopment: Bool {
     return environment == "development"
+  }
+  
+  // MARK: - Configuration Loading Helper
+  
+  /// Loads Config.plist from project root directory
+  /// This works for both debug and release builds when the plist is in the project root
+  private static func loadConfigFromProjectRoot() -> [String: Any]? {
+    // Try to find Config.plist in the project root by looking relative to the bundle
+    let possiblePaths = [
+      // For development builds - relative to current working directory
+      "Config.plist",
+      // For Xcode builds - relative to project directory  
+      "../../../Config.plist",
+      // For Swift Package Manager builds - relative to package root
+      "../../Config.plist",
+      // Additional fallback paths
+      "../Config.plist",
+      "../../../../Config.plist"
+    ]
+    
+    for relativePath in possiblePaths {
+      let expandedPath = NSString(string: relativePath).expandingTildeInPath
+      if FileManager.default.fileExists(atPath: expandedPath),
+         let plist = NSDictionary(contentsOfFile: expandedPath) as? [String: Any] {
+        return plist
+      }
+    }
+    
+    // Also try relative to current working directory (for swift run)
+    let currentDir = FileManager.default.currentDirectoryPath
+    let configPath = NSString(string: currentDir).appendingPathComponent("Config.plist")
+    if FileManager.default.fileExists(atPath: configPath),
+       let plist = NSDictionary(contentsOfFile: configPath) as? [String: Any] {
+      return plist
+    }
+    
+    return nil
   }
 }
 
@@ -115,8 +150,8 @@ extension GoogleCalendarConfig {
   private static func configurationSource() -> String {
     if ProcessInfo.processInfo.environment["GOOGLE_OAUTH_CLIENT_ID"] != nil {
       return "Environment Variable"
-    } else if Bundle.main.path(forResource: "Config", ofType: "plist") != nil {
-      return "Config.plist"
+    } else if loadConfigFromProjectRoot() != nil {
+      return "Config.plist (project root)"
     } else {
       return "Default/Fallback"
     }

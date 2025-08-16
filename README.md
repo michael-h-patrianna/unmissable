@@ -26,7 +26,7 @@ A macOS app that ensures you never miss important meetings by showing an unmissa
 
 This app requires Google Calendar API access. Choose one of these secure configuration methods:
 
-#### Option 1: Environment Variable (Recommended)
+#### Option 1: Config.plist File (Recommended for local development)
 
 1. **Get Google OAuth credentials:**
    - Visit [Google Cloud Console](https://console.developers.google.com/)
@@ -35,10 +35,13 @@ This app requires Google Calendar API access. Choose one of these secure configu
    - Create OAuth 2.0 credentials (Desktop application)
    - Copy the Client ID
 
-2. **Set environment variable:**
+2. **Configure your credentials:**
 
    ```bash
-   export GOOGLE_OAUTH_CLIENT_ID="your-client-id-here"
+   # Copy the template to create your config file
+   cp Config.plist.example Config.plist
+   
+   # Edit Config.plist and replace YOUR_GOOGLE_OAUTH_CLIENT_ID_HERE with your actual client ID
    ```
 
 3. **Build and run:**
@@ -46,23 +49,19 @@ This app requires Google Calendar API access. Choose one of these secure configu
    ```bash
    swift build && swift run
    ```
+   
+   The `Config.plist` file in the project root works automatically for both debug and release builds.
 
-#### Option 2: Config.plist File
+#### Option 2: Environment Variable (Recommended for CI/deployment)
 
-1. **Copy the configuration template:**
+1. **Set environment variable:**
 
    ```bash
-   cp Sources/Unmissable/Config/Config.plist.example Sources/Unmissable/Config/Config.plist
+   export GOOGLE_OAUTH_CLIENT_ID="your-client-id-here"
+   swift build && swift run
    ```
 
-2. **Configure your credentials:**
-   - Open `Sources/Unmissable/Config/Config.plist`
-   - Replace `YOUR_GOOGLE_OAUTH_CLIENT_ID_HERE` with your actual client ID
-   - Save the file
-
-3. **Add to Xcode project resources** (if using Xcode)
-
-**⚠️ Security Note:** Never commit OAuth credentials to version control. Both `Config.plist` and environment variables are secure for local development.
+**⚠️ Security Note:** Never commit OAuth credentials to version control. Both `Config.plist` and environment variables are secure for local development. `Config.plist` is excluded from git via `.gitignore`.
 - Xcode 15+
 
 ## Development Setup
