@@ -27,6 +27,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     logger.info("Unmissable app will terminate")
   }
 
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    // Allow normal termination when explicitly requested (e.g., via Quit menu)
+    logger.info("Application termination requested")
+    return .terminateNow
+  }
+
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
   {
     // Show preferences when app is reopened
@@ -36,15 +42,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     return true
   }
 
-  @objc func handleURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
-    guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
-          let url = URL(string: urlString) else {
+  @objc func handleURLEvent(
+    _ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor
+  ) {
+    guard
+      let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+      let url = URL(string: urlString)
+    else {
       logger.error("Failed to parse URL from Apple Event")
       return
     }
-    
+
     logger.info("Received URL: \(urlString)")
-    
+
     // Handle OAuth callback using bundle ID scheme
     if url.scheme == "com.unmissable.app" {
       NotificationCenter.default.post(

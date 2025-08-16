@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import Network
 import OSLog
@@ -14,12 +15,14 @@ class SyncManager: ObservableObject {
 
   private let apiService: GoogleCalendarAPIService
   private let databaseManager: DatabaseManager
+  private let preferencesManager: PreferencesManager
   private var syncTimer: Timer?
   private var networkMonitor: NWPathMonitor?
   private let networkQueue = DispatchQueue(label: "NetworkMonitor")
+  private var cancellables = Set<AnyCancellable>()
 
-  // Sync configuration
-  private let syncInterval: TimeInterval = 300  // 5 minutes
+  // Sync completion callback
+  var onSyncCompleted: (() async -> Void)?
   private let eventLookAheadDays = 7  // Sync events for next 7 days
 
   // Retry configuration
@@ -27,16 +30,40 @@ class SyncManager: ObservableObject {
   private let baseRetryDelay: TimeInterval = 5.0  // Start with 5 seconds
   private var retryTimer: Timer?
 
-  init(apiService: GoogleCalendarAPIService, databaseManager: DatabaseManager) {
+  init(
+    apiService: GoogleCalendarAPIService, databaseManager: DatabaseManager,
+    preferencesManager: PreferencesManager
+  ) {
     self.apiService = apiService
     self.databaseManager = databaseManager
+    self.preferencesManager = preferencesManager
     setupNetworkMonitoring()
+    setupPreferencesObserver()
   }
 
   deinit {
     networkMonitor?.cancel()
     syncTimer?.invalidate()
     retryTimer?.invalidate()
+  }
+
+  private var syncInterval: TimeInterval {
+    TimeInterval(preferencesManager.syncIntervalSeconds)
+  }
+
+  private func setupPreferencesObserver() {
+    // Watch for sync interval changes
+    preferencesManager.$syncIntervalSeconds
+      .sink { [weak self] _ in
+        Task { @MainActor in
+          // Restart periodic sync with new interval
+          if self?.syncTimer != nil {
+            self?.stopPeriodicSync()
+            self?.startPeriodicSync()
+          }
+        }
+      }
+      .store(in: &cancellables)
   }
 
   private func setupNetworkMonitoring() {
@@ -61,9 +88,16 @@ class SyncManager: ObservableObject {
   }
 
   func startPeriodicSync() {
-    guard syncTimer == nil else { return }
+    guard syncTimer == nil else {
+      logger.info("🔄 Periodic sync already running - timer exists")
+      return
+    }
 
-    logger.info("Starting periodic sync every \(self.syncInterval) seconds")
+    let intervalSeconds = syncInterval
+    let prefsInterval = preferencesManager.syncIntervalSeconds
+    logger.info(
+      "🚀 Starting periodic sync every \(intervalSeconds) seconds (from preferences: \(prefsInterval))"
+    )
 
     // Sync immediately
     Task {
@@ -71,7 +105,7 @@ class SyncManager: ObservableObject {
     }
 
     // Schedule periodic sync
-    syncTimer = Timer.scheduledTimer(withTimeInterval: syncInterval, repeats: true) {
+    syncTimer = Timer.scheduledTimer(withTimeInterval: intervalSeconds, repeats: true) {
       [weak self] _ in
       Task { @MainActor in
         await self?.performSync()
@@ -79,6 +113,7 @@ class SyncManager: ObservableObject {
     }
 
     updateNextSyncTime()
+    logger.info("✅ Periodic sync timer created and scheduled successfully")
   }
 
   func stopPeriodicSync() {
@@ -106,10 +141,19 @@ class SyncManager: ObservableObject {
     do {
       // Get calendars from database
       let calendars = try await databaseManager.fetchCalendars()
+      logger.info("Found \(calendars.count) calendars in database")
+
       let selectedCalendarIds = calendars.filter { $0.isSelected }.map { $0.id }
+      logger.info("Selected calendar IDs: \(selectedCalendarIds)")
 
       guard !selectedCalendarIds.isEmpty else {
         logger.warning("No calendars selected for sync")
+        // Log details about available calendars
+        for calendar in calendars {
+          logger.info(
+            "Available calendar: \(calendar.name) (ID: \(calendar.id), Selected: \(calendar.isSelected))"
+          )
+        }
         syncStatus = .idle
         updateSyncTimes()
         resetRetryCount()
@@ -120,6 +164,9 @@ class SyncManager: ObservableObject {
       let now = Date()
       let endDate = Calendar.current.date(byAdding: .day, value: eventLookAheadDays, to: now) ?? now
 
+      logger.info(
+        "📅 Syncing events from \(now) to \(endDate) (\(self.eventLookAheadDays) days ahead)")
+
       // Fetch events from API
       try await apiService.fetchEvents(
         for: selectedCalendarIds,
@@ -127,8 +174,16 @@ class SyncManager: ObservableObject {
         to: endDate
       )
 
+      let fetchedEvents = apiService.events
+      logger.info("📥 API returned \(fetchedEvents.count) events")
+
+      // Log details about fetched events for debugging
+      for event in fetchedEvents.prefix(5) {  // Log first 5 events
+        logger.info("📅 Event: '\(event.title)' at \(event.startDate)")
+      }
+
       // Save events to database
-      try await databaseManager.saveEvents(apiService.events)
+      try await databaseManager.saveEvents(fetchedEvents)
 
       // Update calendar sync times
       for calendarId in selectedCalendarIds {
@@ -139,7 +194,10 @@ class SyncManager: ObservableObject {
       updateSyncTimes()
       resetRetryCount()
 
-      logger.info("Sync completed successfully. Synced \(self.apiService.events.count) events")
+      logger.info("✅ Sync completed successfully. Synced \(fetchedEvents.count) events")
+
+      // Notify completion callback
+      await onSyncCompleted?()
 
     } catch {
       logger.error("Sync failed: \(error.localizedDescription)")

@@ -90,11 +90,11 @@ final class PreferencesManagerTests: XCTestCase {
   }
 
   func testAppearanceThemeEnum() {
-    XCTAssertEqual(AppearanceTheme.system.displayName, "Follow System")
-    XCTAssertEqual(AppearanceTheme.light.displayName, "Light")
-    XCTAssertEqual(AppearanceTheme.dark.displayName, "Dark")
+    XCTAssertEqual(AppTheme.system.displayName, "Follow System")
+    XCTAssertEqual(AppTheme.light.displayName, "Light")
+    XCTAssertEqual(AppTheme.dark.displayName, "Dark")
 
-    let allThemes = AppearanceTheme.allCases
+    let allThemes = AppTheme.allCases
     XCTAssertEqual(allThemes.count, 3)
   }
 

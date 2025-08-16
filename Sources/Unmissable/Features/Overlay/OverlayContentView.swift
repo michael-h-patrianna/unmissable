@@ -6,9 +6,8 @@ struct OverlayContentView: View {
   let onJoin: () -> Void
   let onSnooze: (Int) -> Void
 
-  @State private var timeRemaining: TimeInterval = 0
-  @State private var timer: Timer?
   @EnvironmentObject private var preferences: PreferencesManager
+  @EnvironmentObject private var overlayManager: OverlayManager
 
   var body: some View {
     ZStack {
@@ -61,29 +60,31 @@ struct OverlayContentView: View {
 
         // Countdown Display
         VStack(spacing: 12 * fontScale) {
-          if timeRemaining > 0 {
+          if overlayManager.timeUntilMeeting > 0 {
             Text("Starting in")
               .font(.system(size: 24 * fontScale))
               .foregroundColor(.gray)
               .accessibilityHidden(true)
 
-            Text(formatTimeRemaining(timeRemaining))
+            Text(formatTimeRemaining(overlayManager.timeUntilMeeting))
               .font(.system(size: 88 * fontScale, weight: .bold, design: .monospaced))
-              .foregroundColor(timeRemaining < 60 ? .red : .blue)
-              .animation(.easeInOut(duration: 0.3), value: timeRemaining < 60)
+              .foregroundColor(overlayManager.timeUntilMeeting < 60 ? .red : .blue)
+              .animation(.easeInOut(duration: 0.3), value: overlayManager.timeUntilMeeting < 60)
               .accessibilityLabel(
-                "Meeting starts in \(formatTimeRemainingForAccessibility(timeRemaining))")
+                "Meeting starts in \(formatTimeRemainingForAccessibility(overlayManager.timeUntilMeeting))"
+              )
 
-          } else if timeRemaining > -300 {
+          } else if overlayManager.timeUntilMeeting > -300 {
             Text("Meeting Started")
               .font(.system(size: 36 * fontScale, weight: .bold))
               .foregroundColor(.red)
               .accessibilityLabel("Meeting has started")
 
-            Text("\(Int(-timeRemaining / 60)) minutes ago")
+            Text("\(Int(-overlayManager.timeUntilMeeting / 60)) minutes ago")
               .font(.system(size: 24 * fontScale))
               .foregroundColor(.orange)
-              .accessibilityLabel("Started \(Int(-timeRemaining / 60)) minutes ago")
+              .accessibilityLabel(
+                "Started \(Int(-overlayManager.timeUntilMeeting / 60)) minutes ago")
 
           } else {
             Text("Meeting has been running")
@@ -175,12 +176,6 @@ struct OverlayContentView: View {
       }
       .padding(40)
     }
-    .onAppear {
-      startCountdown()
-    }
-    .onDisappear {
-      stopCountdown()
-    }
     .onKeyPress(.escape) {
       onDismiss()
       return .handled
@@ -216,23 +211,6 @@ struct OverlayContentView: View {
   }
 
   // MARK: - Private Methods
-
-  private func startCountdown() {
-    updateTimeRemaining()
-
-    timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-      updateTimeRemaining()
-    }
-  }
-
-  private func stopCountdown() {
-    timer?.invalidate()
-    timer = nil
-  }
-
-  private func updateTimeRemaining() {
-    timeRemaining = event.startDate.timeIntervalSinceNow
-  }
 
   private func formatTimeRemaining(_ interval: TimeInterval) -> String {
     let totalSeconds = Int(abs(interval))

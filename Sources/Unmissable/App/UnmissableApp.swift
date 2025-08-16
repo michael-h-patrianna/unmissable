@@ -6,16 +6,31 @@ struct UnmissableApp: App {
   @StateObject private var appState = AppState()
 
   var body: some Scene {
-    MenuBarExtra("Unmissable", systemImage: "calendar.badge.clock") {
+    MenuBarExtra {
       MenuBarView()
+        .environmentObject(appState)
+        .customThemedEnvironment()
+    } label: {
+      MenuBarLabelView()
         .environmentObject(appState)
     }
     .menuBarExtraStyle(.window)
+  }
+}
 
-    // Preferences window
-    Settings {
-      PreferencesView()
-        .environmentObject(appState)
+struct MenuBarLabelView: View {
+  @EnvironmentObject var appState: AppState
+
+  var body: some View {
+    Group {
+      if appState.shouldShowIcon {
+        Image(systemName: "calendar.badge.clock")
+      } else if let text = appState.menuBarText {
+        Text(text)
+          .font(.system(size: 12, weight: .medium, design: .monospaced))
+      } else {
+        Image(systemName: "calendar.badge.clock")
+      }
     }
   }
 }

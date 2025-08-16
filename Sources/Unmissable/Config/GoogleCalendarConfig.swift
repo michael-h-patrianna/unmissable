@@ -9,6 +9,7 @@ struct GoogleCalendarConfig {
   // Google Calendar API scopes
   static let scopes = [
     "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
     "https://www.googleapis.com/auth/userinfo.email",
   ]
 

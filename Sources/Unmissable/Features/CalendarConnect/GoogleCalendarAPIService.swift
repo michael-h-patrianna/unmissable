@@ -28,9 +28,15 @@ class GoogleCalendarAPIService: ObservableObject {
       let accessToken = try await oauth2Service.getValidAccessToken()
       let url = URL(string: "\(GoogleCalendarConfig.calendarAPIBaseURL)/users/me/calendarList")!
 
+      logger.info("Making request to: \(url.absoluteString)")
+
       var request = URLRequest(url: url)
       request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
       request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+      // Log first and last few characters of token for debugging
+      let tokenPreview = "\(accessToken.prefix(10))...\(accessToken.suffix(10))"
+      logger.info("Using access token: \(tokenPreview)")
 
       let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -38,8 +44,19 @@ class GoogleCalendarAPIService: ObservableObject {
         throw GoogleCalendarAPIError.invalidResponse
       }
 
+      logger.info("Response status code: \(httpResponse.statusCode)")
+
       guard httpResponse.statusCode == 200 else {
         let errorMessage = "HTTP \(httpResponse.statusCode)"
+        if httpResponse.statusCode == 404 {
+          logger.error(
+            "Calendar list fetch failed: 404 - Check API is enabled and correct endpoint")
+          logger.error("Request URL: \(url)")
+          // Try to get error details from response body
+          if let errorBody = String(data: data, encoding: .utf8) {
+            logger.error("Error response body: \(errorBody)")
+          }
+        }
         logger.error("Calendar list fetch failed: \(errorMessage)")
         throw GoogleCalendarAPIError.requestFailed(httpResponse.statusCode, errorMessage)
       }
@@ -63,29 +80,36 @@ class GoogleCalendarAPIService: ObservableObject {
 
     defer { isLoading = false }
 
-    do {
-      var allEvents: [Event] = []
+    var allEvents: [Event] = []
+    var successfulCalendars = 0
+    var skippedCalendars = 0
 
-      for calendarId in calendarIds {
+    for calendarId in calendarIds {
+      do {
         let calendarEvents = try await fetchEventsForCalendar(
           calendarId: calendarId,
           startDate: startDate,
           endDate: endDate
         )
         allEvents.append(contentsOf: calendarEvents)
+        successfulCalendars += 1
+        logger.info(
+          "Successfully fetched \(calendarEvents.count) events from calendar \(calendarId)")
+      } catch {
+        skippedCalendars += 1
+        logger.warning(
+          "Skipping calendar \(calendarId) due to error: \(error.localizedDescription)")
+        // Continue with other calendars instead of failing completely
       }
-
-      // Sort events by start date
-      allEvents.sort { $0.startDate < $1.startDate }
-      events = allEvents
-
-      logger.info("Successfully fetched \(allEvents.count) events")
-
-    } catch {
-      logger.error("Failed to fetch events: \(error.localizedDescription)")
-      lastError = error.localizedDescription
-      throw error
     }
+
+    // Sort events by start date
+    allEvents.sort { $0.startDate < $1.startDate }
+    events = allEvents
+
+    logger.info(
+      "Successfully fetched \(allEvents.count) events from \(successfulCalendars) calendars (\(skippedCalendars) skipped)"
+    )
   }
 
   // MARK: - Private Methods
@@ -127,9 +151,18 @@ class GoogleCalendarAPIService: ObservableObject {
     }
 
     guard httpResponse.statusCode == 200 else {
-      let errorMessage = "HTTP \(httpResponse.statusCode)"
-      logger.error("Events fetch failed for calendar \(calendarId): \(errorMessage)")
-      throw GoogleCalendarAPIError.requestFailed(httpResponse.statusCode, errorMessage)
+      // Handle specific calendar access issues gracefully
+      if httpResponse.statusCode == 404 {
+        logger.warning("Calendar \(calendarId) not found or not accessible, skipping")
+        return []  // Return empty array instead of throwing error
+      } else if httpResponse.statusCode == 403 {
+        logger.warning("Access denied to calendar \(calendarId), skipping")
+        return []  // Return empty array instead of throwing error
+      } else {
+        let errorMessage = "HTTP \(httpResponse.statusCode)"
+        logger.error("Events fetch failed for calendar \(calendarId): \(errorMessage)")
+        throw GoogleCalendarAPIError.requestFailed(httpResponse.statusCode, errorMessage)
+      }
     }
 
     return try parseEventList(from: data, calendarId: calendarId)

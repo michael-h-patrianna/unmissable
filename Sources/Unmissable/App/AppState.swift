@@ -17,22 +17,34 @@ class AppState: ObservableObject {
   @Published var authError: String?
   @Published var healthStatus: HealthStatus = .healthy
 
+  // Menu bar preview properties (mirrored from MenuBarPreviewManager)
+  @Published var menuBarText: String? = nil
+  @Published var shouldShowIcon: Bool = true
+
   // Services
-  private let calendarService = CalendarService()
+  private let calendarService: CalendarService
   private let preferencesManager = PreferencesManager()
   private let overlayManager: OverlayManager
-  private let eventScheduler = EventScheduler()
+  private let eventScheduler: EventScheduler
   private let shortcutsManager = ShortcutsManager()
   private let focusModeManager: FocusModeManager
   private let healthMonitor = HealthMonitor()
+  private let menuBarPreviewManager: MenuBarPreviewManager
+  private lazy var preferencesWindowManager = PreferencesWindowManager(appState: self)
 
   private var cancellables = Set<AnyCancellable>()
 
   init() {
     // Initialize services in dependency order
     self.focusModeManager = FocusModeManager(preferencesManager: preferencesManager)
+    self.calendarService = CalendarService(preferencesManager: preferencesManager)
     self.overlayManager = OverlayManager(
       preferencesManager: preferencesManager, focusModeManager: focusModeManager)
+    self.eventScheduler = EventScheduler(preferencesManager: preferencesManager)
+    self.menuBarPreviewManager = MenuBarPreviewManager(preferencesManager: preferencesManager)
+
+    // Connect OverlayManager to EventScheduler for proper snooze functionality
+    overlayManager.setEventScheduler(eventScheduler)
 
     setupBindings()
     checkInitialState()
@@ -64,6 +76,13 @@ class AppState: ObservableObject {
       .assign(to: \.upcomingEvents, on: self)
       .store(in: &cancellables)
 
+    // Update menu bar preview when events change
+    calendarService.$events
+      .sink { [weak self] events in
+        self?.menuBarPreviewManager.updateEvents(events)
+      }
+      .store(in: &cancellables)
+
     // Observe calendars
     calendarService.$calendars
       .assign(to: \.calendars, on: self)
@@ -88,13 +107,58 @@ class AppState: ObservableObject {
     healthMonitor.$healthStatus
       .assign(to: \.healthStatus, on: self)
       .store(in: &cancellables)
+
+    // Mirror menu bar preview manager properties AND observe preferences directly
+    menuBarPreviewManager.$menuBarText
+      .receive(on: DispatchQueue.main)
+      .assign(to: \.menuBarText, on: self)
+      .store(in: &cancellables)
+
+    menuBarPreviewManager.$shouldShowIcon
+      .receive(on: DispatchQueue.main)
+      .assign(to: \.shouldShowIcon, on: self)
+      .store(in: &cancellables)
+
+    // ALSO directly observe preference changes to force immediate UI updates
+    preferencesManager.$menuBarDisplayMode
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] _ in
+        // Force update the mirrored properties immediately when preferences change
+        DispatchQueue.main.async {
+          self?.objectWillChange.send()
+        }
+      }
+      .store(in: &cancellables)
+
+    // Set up callback to reschedule events after sync updates
+    setupEventReschedulingCallback()
+  }
+
+  private func setupEventReschedulingCallback() {
+    calendarService.onEventsUpdated = { [weak self] in
+      await self?.rescheduleEventsAfterSync()
+    }
+  }
+
+  private func rescheduleEventsAfterSync() async {
+    logger.info("🔄 Rescheduling events after sync completion...")
+    await eventScheduler.startScheduling(
+      events: upcomingEvents,
+      overlayManager: overlayManager
+    )
+    logger.info("✅ Events rescheduled with updated times")
   }
 
   private func checkInitialState() {
+    logger.info("🔍 AppState checking initial state...")
     Task {
       await calendarService.checkConnectionStatus()
-      if isConnectedToCalendar {
-        await startPeriodicSync()
+      logger.info("📡 Connection status checked - isConnected: \(self.isConnectedToCalendar)")
+      if self.isConnectedToCalendar {
+        logger.info("🔄 Starting periodic sync due to existing connection")
+        await self.startPeriodicSync()
+      } else {
+        logger.info("❌ Not connected to calendar - sync not started")
       }
     }
   }
@@ -147,11 +211,29 @@ class AppState: ObservableObject {
     healthMonitor
   }
 
+  var menuBarPreviewManagerPublic: MenuBarPreviewManager {
+    menuBarPreviewManager
+  }
+
+  func showPreferences() {
+    preferencesWindowManager.showPreferences()
+  }
+
   private func startPeriodicSync() async {
+    logger.info("🚀 AppState.startPeriodicSync() called")
+    // Start both event scheduling and calendar sync
     await eventScheduler.startScheduling(
       events: upcomingEvents,
       overlayManager: overlayManager
     )
+
+    // Also start periodic calendar sync if connected
+    if isConnectedToCalendar {
+      logger.info("📅 Calling SyncManager.startPeriodicSync()")
+      calendarService.syncManagerPublic.startPeriodicSync()
+    } else {
+      logger.info("❌ Not connected - skipping SyncManager.startPeriodicSync()")
+    }
   }
 }
 

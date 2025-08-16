@@ -20,7 +20,7 @@ class OAuth2Service: ObservableObject {
 
   init() {
     loadAuthStateFromKeychain()
-    
+
     // Listen for OAuth callback notifications
     NotificationCenter.default.addObserver(
       self,
@@ -29,16 +29,16 @@ class OAuth2Service: ObservableObject {
       object: nil
     )
   }
-  
+
   deinit {
     NotificationCenter.default.removeObserver(self)
   }
-  
+
   @objc private func handleOAuthCallback(_ notification: Notification) {
     guard let url = notification.object as? URL else { return }
-    
+
     logger.info("Handling OAuth callback URL: \(url)")
-    
+
     // Handle the callback URL with AppAuth
     if let currentAuthFlow = self.currentAuthorizationFlow {
       if currentAuthFlow.resumeExternalUserAgentFlow(with: url) {
@@ -46,7 +46,7 @@ class OAuth2Service: ObservableObject {
       }
     }
   }
-  
+
   private var currentAuthorizationFlow: OIDExternalUserAgentSession?
 
   // MARK: - Public Interface
@@ -94,7 +94,7 @@ class OAuth2Service: ObservableObject {
       )
       let presentingWindow = NSApplication.shared.keyWindow ?? fallbackWindow
       let userAgent = OIDExternalUserAgentMac(presenting: presentingWindow)
-      
+
       self.currentAuthorizationFlow = OIDAuthorizationService.present(
         request,
         externalUserAgent: userAgent

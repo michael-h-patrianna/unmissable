@@ -30,7 +30,9 @@ class FocusModeManager: ObservableObject {
       object: nil,
       queue: .main
     ) { [weak self] _ in
-      self?.checkDoNotDisturbStatus()
+      Task { @MainActor in
+        self?.checkDoNotDisturbStatus()
+      }
     }
 
     // Also monitor for Focus mode changes (macOS 12+)
@@ -40,41 +42,52 @@ class FocusModeManager: ObservableObject {
         object: nil,
         queue: .main
       ) { [weak self] _ in
-        self?.checkDoNotDisturbStatus()
+        Task { @MainActor in
+          self?.checkDoNotDisturbStatus()
+        }
       }
     }
   }
 
   private func checkDoNotDisturbStatus() {
-    // Check Do Not Disturb status using private API
-    let task = Process()
-    task.launchPath = "/usr/bin/plutil"
-    task.arguments = [
-      "-extract", "dnd_prefs.dnd_manually_enabled", "raw",
-      NSHomeDirectory() + "/Library/Preferences/com.apple.ncprefs.plist",
-    ]
+    // Move blocking process execution to background queue to prevent UI freeze
+    Task.detached { [weak self] in
+      // Check Do Not Disturb status using private API
+      let task = Process()
+      task.launchPath = "/usr/bin/plutil"
+      task.arguments = [
+        "-extract", "dnd_prefs.dnd_manually_enabled", "raw",
+        NSHomeDirectory() + "/Library/Preferences/com.apple.ncprefs.plist",
+      ]
 
-    let pipe = Pipe()
-    task.standardOutput = pipe
-    task.standardError = pipe
+      let pipe = Pipe()
+      task.standardOutput = pipe
+      task.standardError = pipe
 
-    do {
-      try task.run()
-      task.waitUntilExit()
+      do {
+        try task.run()
+        task.waitUntilExit()
 
-      let data = pipe.fileHandleForReading.readDataToEndOfFile()
-      if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(
-        in: .whitespacesAndNewlines)
-      {
-        let newDNDStatus = output == "1" || output == "true"
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(
+          in: .whitespacesAndNewlines)
+        {
+          let newDNDStatus = output == "1" || output == "true"
 
-        if newDNDStatus != isDoNotDisturbEnabled {
-          isDoNotDisturbEnabled = newDNDStatus
-          logger.info("Do Not Disturb status changed: \(newDNDStatus)")
+          // Update UI on main thread
+          await MainActor.run { [weak self] in
+            guard let self = self else { return }
+            if newDNDStatus != self.isDoNotDisturbEnabled {
+              self.isDoNotDisturbEnabled = newDNDStatus
+              self.logger.info("Do Not Disturb status changed: \(newDNDStatus)")
+            }
+          }
+        }
+      } catch {
+        await MainActor.run { [weak self] in
+          self?.logger.error("Failed to check Do Not Disturb status: \(error.localizedDescription)")
         }
       }
-    } catch {
-      logger.error("Failed to check Do Not Disturb status: \(error.localizedDescription)")
     }
   }
 

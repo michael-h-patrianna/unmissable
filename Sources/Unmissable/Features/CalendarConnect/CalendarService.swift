@@ -18,16 +18,24 @@ class CalendarService: ObservableObject {
   private let syncManager: SyncManager
   private let databaseManager: DatabaseManager
   private let timezoneManager: TimezoneManager
+  private let preferencesManager: PreferencesManager
   private var cancellables = Set<AnyCancellable>()
 
-  init() {
+  // Callback to notify when events need to be rescheduled after sync
+  var onEventsUpdated: (() async -> Void)?
+
+  init(preferencesManager: PreferencesManager) {
+    self.preferencesManager = preferencesManager
     self.oauth2Service = OAuth2Service()
     self.apiService = GoogleCalendarAPIService(oauth2Service: oauth2Service)
     self.databaseManager = DatabaseManager.shared
-    self.syncManager = SyncManager(apiService: apiService, databaseManager: databaseManager)
+    self.syncManager = SyncManager(
+      apiService: apiService, databaseManager: databaseManager,
+      preferencesManager: preferencesManager)
     self.timezoneManager = TimezoneManager.shared
 
     setupBindings()
+    setupSyncCallback()
   }
 
   private func setupBindings() {
@@ -63,6 +71,18 @@ class CalendarService: ObservableObject {
         }
       }
       .store(in: &cancellables)
+  }
+
+  private func setupSyncCallback() {
+    // Set up callback to refresh UI after automatic sync completes
+    syncManager.onSyncCompleted = { [weak self] in
+      await self?.loadCachedData()
+      self?.logger.info("🔄 UI refreshed after automatic sync completion")
+
+      // Also notify that events have been updated so alerts can be rescheduled
+      await self?.onEventsUpdated?()
+      self?.logger.info("📅 Event rescheduling triggered after sync completion")
+    }
   }
 
   func checkConnectionStatus() async {

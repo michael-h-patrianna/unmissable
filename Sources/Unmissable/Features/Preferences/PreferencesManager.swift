@@ -1,5 +1,7 @@
 import Combine
 import Foundation
+// Import our custom theme system
+import SwiftUI
 
 @MainActor
 class PreferencesManager: ObservableObject {
@@ -35,9 +37,13 @@ class PreferencesManager: ObservableObject {
     didSet { userDefaults.set(includeAllDayEvents, forKey: "includeAllDayEvents") }
   }
 
-  // Appearance
-  @Published var appearanceTheme: AppearanceTheme = .system {
-    didSet { userDefaults.set(appearanceTheme.rawValue, forKey: "appearanceTheme") }
+  // Appearance - Updated to use new custom theme system
+  @Published var appearanceTheme: AppTheme = .system {
+    didSet {
+      userDefaults.set(appearanceTheme.rawValue, forKey: "appearanceTheme")
+      // Update the global theme manager
+      ThemeManager.shared.setTheme(appearanceTheme)
+    }
   }
 
   @Published var overlayOpacity: Double = 0.9 {
@@ -83,6 +89,22 @@ class PreferencesManager: ObservableObject {
     didSet { userDefaults.set(autoJoinEnabled, forKey: "autoJoinEnabled") }
   }
 
+  // Snooze
+  @Published var allowSnooze: Bool = true {
+    didSet { userDefaults.set(allowSnooze, forKey: "allowSnooze") }
+  }
+
+  // Menu bar display
+  @Published var menuBarDisplayMode: MenuBarDisplayMode = .icon {
+    didSet {
+      userDefaults.set(menuBarDisplayMode.rawValue, forKey: "menuBarDisplayMode")
+    }
+  }
+
+  @Published var showTodayOnlyInMenuBar: Bool = false {
+    didSet { userDefaults.set(showTodayOnlyInMenuBar, forKey: "showTodayOnlyInMenuBar") }
+  }
+
   init() {
     loadPreferences()
   }
@@ -99,9 +121,15 @@ class PreferencesManager: ObservableObject {
     includeAllDayEvents = userDefaults.bool(forKey: "includeAllDayEvents")
 
     if let themeRawValue = userDefaults.object(forKey: "appearanceTheme") as? String,
-      let theme = AppearanceTheme(rawValue: themeRawValue)
+      let theme = AppTheme(rawValue: themeRawValue)
     {
+      print("🎨 PreferencesManager: Loading theme '\(themeRawValue)' -> \(theme)")
       appearanceTheme = theme
+      // Ensure ThemeManager is updated immediately
+      ThemeManager.shared.setTheme(theme)
+    } else {
+      print("🎨 PreferencesManager: No saved theme, using default")
+      ThemeManager.shared.setTheme(.system)
     }
 
     overlayOpacity = userDefaults.object(forKey: "overlayOpacity") as? Double ?? 0.9
@@ -121,6 +149,19 @@ class PreferencesManager: ObservableObject {
 
     overrideFocusMode = userDefaults.object(forKey: "overrideFocusMode") as? Bool ?? true
     autoJoinEnabled = userDefaults.bool(forKey: "autoJoinEnabled")
+    allowSnooze = userDefaults.object(forKey: "allowSnooze") as? Bool ?? true
+
+    if let modeRawValue = userDefaults.object(forKey: "menuBarDisplayMode") as? String,
+      let mode = MenuBarDisplayMode(rawValue: modeRawValue)
+    {
+      print("🔧 PreferencesManager: Loading from UserDefaults: '\(modeRawValue)' -> \(mode)")
+      menuBarDisplayMode = mode
+    } else {
+      print(
+        "🔧 PreferencesManager: No saved menuBarDisplayMode, using default: \(menuBarDisplayMode)")
+    }
+
+    showTodayOnlyInMenuBar = userDefaults.bool(forKey: "showTodayOnlyInMenuBar")
   }
 
   func alertMinutes(for event: Event) -> Int {
@@ -140,22 +181,7 @@ class PreferencesManager: ObservableObject {
   }
 }
 
-enum AppearanceTheme: String, CaseIterable {
-  case system = "system"
-  case light = "light"
-  case dark = "dark"
-
-  var displayName: String {
-    switch self {
-    case .system:
-      return "Follow System"
-    case .light:
-      return "Light"
-    case .dark:
-      return "Dark"
-    }
-  }
-}
+// Note: AppTheme is now defined in ThemeManager.swift
 
 enum FontSize: String, CaseIterable {
   case small = "small"
@@ -170,6 +196,23 @@ enum FontSize: String, CaseIterable {
       return 1.0
     case .large:
       return 1.4
+    }
+  }
+}
+
+enum MenuBarDisplayMode: String, CaseIterable {
+  case icon = "icon"
+  case timer = "timer"
+  case nameTimer = "nameTimer"
+
+  var displayName: String {
+    switch self {
+    case .icon:
+      return "Icon Only"
+    case .timer:
+      return "Timer"
+    case .nameTimer:
+      return "Name + Timer"
     }
   }
 }
