@@ -10,6 +10,7 @@ class EventScheduler: ObservableObject {
   @Published var scheduledAlerts: [ScheduledAlert] = []
 
   private var timer: Timer?
+  private var monitoringTask: Task<Void, Never>?
   private let preferencesManager: PreferencesManager
   private var cancellables = Set<AnyCancellable>()
 
@@ -23,6 +24,7 @@ class EventScheduler: ObservableObject {
   }
 
   deinit {
+    monitoringTask?.cancel()
     timer?.invalidate()
     cancellables.removeAll()
   }
@@ -32,7 +34,7 @@ class EventScheduler: ObservableObject {
     Publishers.CombineLatest4(
       preferencesManager.$defaultAlertMinutes,
       preferencesManager.$useLengthBasedTiming,
-      preferencesManager.$overlayShowMinutesBefore,
+      preferencesManager.$defaultAlertMinutes,
       preferencesManager.$shortMeetingAlertMinutes
     )
     .sink { [weak self] _, _, _, _ in
@@ -60,7 +62,12 @@ class EventScheduler: ObservableObject {
   }
 
   func startScheduling(events: [Event], overlayManager: OverlayManager) async {
-    logger.info("Starting event scheduling for \(events.count) events")
+    logger.info("🚀 Starting event scheduling for \(events.count) events")
+
+    // Log the first few events for debugging
+    for (index, event) in events.prefix(3).enumerated() {
+      logger.info("  📅 Event \(index + 1): '\(event.title)' at \(event.startDate)")
+    }
 
     // Store for future rescheduling when preferences change
     currentEvents = events
@@ -70,6 +77,8 @@ class EventScheduler: ObservableObject {
     scheduleAlerts(for: events)
     scheduleOverlays(for: events, overlayManager: overlayManager)
     startMonitoring(overlayManager: overlayManager)
+
+    logger.info("✅ Event scheduling setup completed")
   }
 
   private func rescheduleCurrentAlerts() async {
@@ -91,6 +100,8 @@ class EventScheduler: ObservableObject {
     logger.info("🛑 STOP SCHEDULING: Starting cleanup")
 
     // CRITICAL FIX: Ensure proper cleanup on main thread
+    monitoringTask?.cancel()
+    monitoringTask = nil
     timer?.invalidate()
     timer = nil
     scheduledAlerts.removeAll()
@@ -125,7 +136,7 @@ class EventScheduler: ObservableObject {
       }
 
       // Schedule overlay alerts based on preferences
-      let overlayTiming = preferencesManager.overlayShowMinutesBefore
+      let overlayTiming = preferencesManager.defaultAlertMinutes
       let overlayTime = event.startDate.addingTimeInterval(-TimeInterval(overlayTiming * 60))
 
       if overlayTime > currentTime {
@@ -166,7 +177,7 @@ class EventScheduler: ObservableObject {
 
   private func scheduleOverlays(for events: [Event], overlayManager: OverlayManager) {
     let currentTime = Date()
-    let overlayTiming = preferencesManager.overlayShowMinutesBefore
+    let overlayTiming = preferencesManager.defaultAlertMinutes
 
     print(
       "🎯 SCHEDULE OVERLAYS: Processing \(events.count) events with timing \(overlayTiming) minutes before"
@@ -187,10 +198,17 @@ class EventScheduler: ObservableObject {
   }
 
   private func startMonitoring(overlayManager: OverlayManager) {
-    timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-      Task { @MainActor [weak self] in
-        guard let self = self else { return }
-        await self.checkForTriggeredAlerts(overlayManager: overlayManager)
+    monitoringTask = Task { @MainActor in
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(5))
+          if !Task.isCancelled {
+            await checkForTriggeredAlerts(overlayManager: overlayManager)
+          }
+        } catch {
+          // Task was cancelled, exit the loop
+          break
+        }
       }
     }
   }

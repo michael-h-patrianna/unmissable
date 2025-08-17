@@ -12,6 +12,7 @@ class MenuBarPreviewManager: ObservableObject {
   private let preferencesManager: PreferencesManager
   private var events: [Event] = []
   private var timer: Timer?
+  private var timerTask: Task<Void, Never>?
   private var cancellables = Set<AnyCancellable>()
 
   init(preferencesManager: PreferencesManager) {
@@ -94,14 +95,24 @@ class MenuBarPreviewManager: ObservableObject {
 
   private func startTimer() {
     stopTimer()
-    timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-      Task { @MainActor in
-        self?.updateTimerDisplayIfNeeded()
+    timerTask = Task { @MainActor in
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(1))
+          if !Task.isCancelled {
+            updateTimerDisplayIfNeeded()
+          }
+        } catch {
+          // Task was cancelled, exit the loop
+          break
+        }
       }
     }
   }
 
   private func stopTimer() {
+    timerTask?.cancel()
+    timerTask = nil
     timer?.invalidate()
     timer = nil
   }
@@ -177,6 +188,7 @@ class MenuBarPreviewManager: ObservableObject {
   }
 
   deinit {
+    timerTask?.cancel()
     timer?.invalidate()
   }
 }

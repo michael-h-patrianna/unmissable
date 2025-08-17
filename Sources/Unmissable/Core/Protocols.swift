@@ -82,7 +82,7 @@ class TestSafeOverlayManager: OverlayManaging {
 
     if timeUntilShow > 0 {
       Timer.scheduledTimer(withTimeInterval: timeUntilShow, repeats: false) { [weak self] _ in
-        DispatchQueue.main.async {
+        Task { @MainActor in
           print("🔥 TEST-SAFE TIMER: Firing for \(event.title)")
           self?.showOverlay(
             for: event, minutesBeforeMeeting: minutesBeforeMeeting, fromSnooze: false)

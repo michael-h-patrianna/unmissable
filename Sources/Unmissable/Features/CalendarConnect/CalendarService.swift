@@ -22,6 +22,7 @@ class CalendarService: ObservableObject {
   private let preferencesManager: PreferencesManager
   private var cancellables = Set<AnyCancellable>()
   private var uiRefreshTimer: Timer?
+  private var uiRefreshTask: Task<Void, Never>?
 
   // Callback to notify when events need to be rescheduled after sync
   var onEventsUpdated: (() async -> Void)?
@@ -115,6 +116,7 @@ class CalendarService: ObservableObject {
   func disconnect() async {
     logger.info("Disconnecting from calendar")
     syncManager.stopPeriodicSync()
+    stopUIRefreshTimer()
     oauth2Service.signOut()
     events = []
     calendars = []
@@ -261,15 +263,25 @@ class CalendarService: ObservableObject {
   private func startUIRefreshTimer() {
     // Start a timer that refreshes UI events every 30 seconds
     // This ensures real-time updates for time-dependent UI elements like join buttons
-    uiRefreshTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-      Task { @MainActor in
-        await self?.refreshUIEvents()
+    uiRefreshTask = Task { @MainActor in
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(30))
+          if !Task.isCancelled {
+            await refreshUIEvents()
+          }
+        } catch {
+          // Task was cancelled, exit the loop
+          break
+        }
       }
     }
     logger.info("✅ UI refresh timer started (30 second interval)")
   }
 
   private func stopUIRefreshTimer() {
+    uiRefreshTask?.cancel()
+    uiRefreshTask = nil
     uiRefreshTimer?.invalidate()
     uiRefreshTimer = nil
     logger.info("⏹️ UI refresh timer stopped")

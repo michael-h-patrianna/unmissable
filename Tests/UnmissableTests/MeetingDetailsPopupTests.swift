@@ -129,7 +129,8 @@ class MeetingDetailsPopupTests: XCTestCase {
         name: "Very Long Attendee Name \(index)",
         email:
           "very.long.email.address.for.testing.purposes.attendee\(index)@verylongdomainname.example.com",
-        status: .accepted
+        status: .accepted,
+        isSelf: false
       )
     }
 
@@ -217,7 +218,8 @@ class MeetingDetailsPopupTests: XCTestCase {
       description: String(repeating: "Performance test description. ", count: 1000),
       attendees: (1...200).map { index in
         Attendee(
-          name: "Attendee \(index)", email: "attendee\(index)@example.com", status: .accepted, isSelf: false)
+          name: "Attendee \(index)", email: "attendee\(index)@example.com", status: .accepted,
+          isSelf: false)
       },
       calendarId: "performance"
     )
@@ -248,9 +250,12 @@ class MeetingDetailsPopupTests: XCTestCase {
       description: "This is a sample meeting for testing purposes.",
       location: "Conference Room A",
       attendees: [
-        Attendee(name: "John Doe", email: "john@example.com", status: .accepted, isOrganizer: true, isSelf: false),
+        Attendee(
+          name: "John Doe", email: "john@example.com", status: .accepted, isOrganizer: true,
+          isSelf: false),
         Attendee(name: "Jane Smith", email: "jane@example.com", status: .tentative, isSelf: false),
-        Attendee(email: "contractor@external.com", status: .needsAction, isOptional: true, isSelf: false),
+        Attendee(
+          email: "contractor@external.com", status: .needsAction, isOptional: true, isSelf: false),
       ],
       calendarId: "primary",
       links: [URL(string: "https://meet.google.com/abc-defg-hij")!]

@@ -57,8 +57,8 @@ class OverlayManager: ObservableObject, OverlayManaging {
     // CRITICAL FIX: Ensure we're on main thread and prevent re-entrance
     guard Thread.isMainThread else {
       logger.error("❌ THREADING ERROR: showOverlay called off main thread")
-      DispatchQueue.main.async { [weak self] in
-        self?.showOverlay(
+      Task { @MainActor in
+        self.showOverlay(
           for: event, minutesBeforeMeeting: minutesBeforeMeeting, fromSnooze: fromSnooze)
       }
       return
@@ -115,8 +115,8 @@ class OverlayManager: ObservableObject, OverlayManaging {
     // CRITICAL FIX: Ensure we're on main thread
     guard Thread.isMainThread else {
       logger.error("❌ THREADING ERROR: hideOverlay called off main thread")
-      DispatchQueue.main.async { [weak self] in
-        self?.hideOverlay()
+      Task { @MainActor in
+        self.hideOverlay()
       }
       return
     }
@@ -181,7 +181,7 @@ class OverlayManager: ObservableObject, OverlayManaging {
     let timeUntilShow = showTime.timeIntervalSinceNow
 
     logger.info(
-      "🎯 SCHEDULE: Event '\(event.title)' should trigger in \(timeUntilShow)s (showTime: \(showTime))"
+      "🎯 SCHEDULE: Event '\(event.title)' should trigger in \(timeUntilShow)s (showTime: \(showTime), current: \(Date()))"
     )
 
     if timeUntilShow > 0 {
@@ -195,14 +195,14 @@ class OverlayManager: ObservableObject, OverlayManaging {
         self.logger.info("🔥 TIMER FIRED: Attempting to show overlay for \(event.title)")
 
         // CRITICAL FIX: Always use async dispatch to avoid deadlocks
-        DispatchQueue.main.async { [weak self] in
-          guard let self = self else { return }
+        Task { @MainActor in
           self.logger.info("📱 MAIN QUEUE: Calling showOverlay for \(event.title)")
           self.showOverlay(
             for: event, minutesBeforeMeeting: minutesBeforeMeeting, fromSnooze: false)
         }
       }
       scheduledTimers.append(scheduleTimer)  // Track the timer for cleanup
+      logger.info("📝 TIMER SCHEDULED: Total scheduled timers: \(self.scheduledTimers.count)")
     } else {
       logger.warning(
         "⚠️ SKIP: Event \(event.title) starts too soon to schedule overlay (timeUntilShow: \(timeUntilShow))"
@@ -249,16 +249,16 @@ class OverlayManager: ObservableObject, OverlayManaging {
       event: event,
       onDismiss: { [weak self] in
         // CRITICAL FIX: Use background queue to break out of main thread deadlock
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task.detached(priority: .userInitiated) {
           // Then dispatch back to main for UI operations
-          DispatchQueue.main.async {
+          await MainActor.run {
             self?.hideOverlay()
           }
         }
       },
       onJoin: { [weak self] in
-        DispatchQueue.global(qos: .userInitiated).async {
-          DispatchQueue.main.async {
+        Task.detached(priority: .userInitiated) {
+          await MainActor.run {
             if let url = event.primaryLink {
               NSWorkspace.shared.open(url)
               self?.hideOverlay()
@@ -267,8 +267,8 @@ class OverlayManager: ObservableObject, OverlayManaging {
         }
       },
       onSnooze: { [weak self] minutes in
-        DispatchQueue.global(qos: .userInitiated).async {
-          DispatchQueue.main.async {
+        Task.detached(priority: .userInitiated) {
+          await MainActor.run {
             self?.snoozeOverlay(for: minutes)
           }
         }
@@ -291,8 +291,8 @@ class OverlayManager: ObservableObject, OverlayManaging {
 
     countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
       guard let self = self else { return }
-      DispatchQueue.main.async { [weak self] in
-        self?.updateCountdown(for: event)
+      Task { @MainActor in
+        self.updateCountdown(for: event)
       }
     }
   }
@@ -330,8 +330,8 @@ class OverlayManager: ObservableObject, OverlayManaging {
         "⏰ AUTO-HIDE: Meeting \(event.title) started >\(thresholdMinutes) minutes ago, hiding overlay (snoozed: \(self.isSnoozedAlert))"
       )
       // CRITICAL FIX: Use async dispatch to prevent timer re-entrance issues
-      DispatchQueue.main.async { [weak self] in
-        self?.hideOverlay()
+      Task { @MainActor in
+        self.hideOverlay()
       }
     }
   }

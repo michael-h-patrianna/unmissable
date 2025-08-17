@@ -74,10 +74,10 @@ class MeetingDetailsPopupManager: ObservableObject {
       .customThemedEnvironment()
       .onDisappear {
         // Clean up when view disappears
-        DispatchQueue.main.async { [weak self] in
-          self?.isPopupVisible = false
-          self?.popupWindow = nil
-          self?.parentWindow = nil
+        Task { @MainActor in
+          self.isPopupVisible = false
+          self.popupWindow = nil
+          self.parentWindow = nil
         }
       }
 
@@ -104,8 +104,8 @@ class MeetingDetailsPopupManager: ObservableObject {
 
     // Set up window delegate for cleanup
     let delegate = PopupWindowDelegate { [weak self] in
-      DispatchQueue.global(qos: .userInitiated).async {
-        DispatchQueue.main.async {
+      Task.detached(priority: .userInitiated) {
+        await MainActor.run {
           self?.hidePopup()
         }
       }
@@ -167,8 +167,11 @@ private class PopupWindowDelegate: NSObject, NSWindowDelegate {
 
   func windowDidResignKey(_ notification: Notification) {
     // Close popup when it loses focus to another window (but allow for brief interactions)
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-      self.onClose()
+    Task {
+      try? await Task.sleep(for: .milliseconds(100))
+      await MainActor.run {
+        self.onClose()
+      }
     }
   }
 }

@@ -126,23 +126,18 @@ class AppState: ObservableObject {
 
     // Mirror menu bar preview manager properties AND observe preferences directly
     menuBarPreviewManager.$menuBarText
-      .receive(on: DispatchQueue.main)
       .assign(to: \.menuBarText, on: self)
       .store(in: &cancellables)
 
     menuBarPreviewManager.$shouldShowIcon
-      .receive(on: DispatchQueue.main)
       .assign(to: \.shouldShowIcon, on: self)
       .store(in: &cancellables)
 
     // ALSO directly observe preference changes to force immediate UI updates
     preferencesManager.$menuBarDisplayMode
-      .receive(on: DispatchQueue.main)
       .sink { [weak self] _ in
         // Force update the mirrored properties immediately when preferences change
-        DispatchQueue.main.async {
-          self?.objectWillChange.send()
-        }
+        self?.objectWillChange.send()
       }
       .store(in: &cancellables)
 
@@ -158,8 +153,15 @@ class AppState: ObservableObject {
 
   private func rescheduleEventsAfterSync() async {
     logger.info("🔄 Rescheduling events after sync completion...")
+    logger.info("📋 Events available for rescheduling: \(self.upcomingEvents.count)")
+
+    // List the first few events for debugging
+    for (index, event) in self.upcomingEvents.prefix(3).enumerated() {
+      logger.info("  Event \(index + 1): \(event.title) at \(event.startDate)")
+    }
+
     await eventScheduler.startScheduling(
-      events: upcomingEvents,
+      events: self.upcomingEvents,
       overlayManager: overlayManager
     )
     logger.info("✅ Events rescheduled with updated times")
@@ -241,9 +243,16 @@ class AppState: ObservableObject {
 
   private func startPeriodicSync() async {
     logger.info("🚀 AppState.startPeriodicSync() called")
+
+    // CRITICAL FIX: Load cached data first to ensure we have events to schedule
+    logger.info("📥 Loading cached events before scheduling...")
+    await calendarService.checkConnectionStatus()  // This calls loadCachedData internally
+
+    logger.info("📋 Events available for scheduling: \(self.upcomingEvents.count)")
+
     // Start both event scheduling and calendar sync
     await eventScheduler.startScheduling(
-      events: upcomingEvents,
+      events: self.upcomingEvents,
       overlayManager: overlayManager
     )
 

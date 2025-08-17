@@ -18,6 +18,7 @@ class SyncManager: ObservableObject {
   private let databaseManager: DatabaseManager
   private let preferencesManager: PreferencesManager
   private var syncTimer: Timer?
+  private var syncTask: Task<Void, Never>?
   private var networkMonitor: NWPathMonitor?
   private let networkQueue = DispatchQueue(label: "NetworkMonitor")
   private var cancellables = Set<AnyCancellable>()
@@ -30,6 +31,7 @@ class SyncManager: ObservableObject {
   private let maxRetries = 5
   private let baseRetryDelay: TimeInterval = 5.0  // Start with 5 seconds
   private var retryTimer: Timer?
+  private var retryTask: Task<Void, Never>?
 
   init(
     apiService: GoogleCalendarAPIService, databaseManager: DatabaseManager,
@@ -100,16 +102,22 @@ class SyncManager: ObservableObject {
       "🚀 Starting periodic sync every \(intervalSeconds) seconds (from preferences: \(prefsInterval))"
     )
 
-    // Sync immediately
-    Task {
-      await performSync()
-    }
-
     // Schedule periodic sync
-    syncTimer = Timer.scheduledTimer(withTimeInterval: intervalSeconds, repeats: true) {
-      [weak self] _ in
-      Task { @MainActor in
-        await self?.performSync()
+    syncTask = Task { @MainActor in
+      // First sync immediately
+      await performSync()
+
+      // Then repeat every interval
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(Int(intervalSeconds)))
+          if !Task.isCancelled {
+            await performSync()
+          }
+        } catch {
+          // Task was cancelled, exit the loop
+          break
+        }
       }
     }
 
@@ -118,6 +126,8 @@ class SyncManager: ObservableObject {
   }
 
   func stopPeriodicSync() {
+    syncTask?.cancel()
+    syncTask = nil
     syncTimer?.invalidate()
     syncTimer = nil
     nextSyncTime = nil
@@ -281,10 +291,15 @@ class SyncManager: ObservableObject {
     syncStatus = .error("Retrying in \(Int(retryDelay))s...")
 
     retryTimer?.invalidate()
-    retryTimer = Timer.scheduledTimer(withTimeInterval: retryDelay, repeats: false) {
-      [weak self] _ in
-      Task { @MainActor in
-        await self?.performSync()
+    retryTask?.cancel()
+    retryTask = Task { @MainActor in
+      do {
+        try await Task.sleep(for: .seconds(Int(retryDelay)))
+        if !Task.isCancelled {
+          await performSync()
+        }
+      } catch {
+        // Task was cancelled
       }
     }
   }
@@ -298,6 +313,8 @@ class SyncManager: ObservableObject {
 
   private func resetRetryCount() {
     retryCount = 0
+    retryTask?.cancel()
+    retryTask = nil
     retryTimer?.invalidate()
     retryTimer = nil
   }

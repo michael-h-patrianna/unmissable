@@ -9,6 +9,7 @@ class HealthMonitor: ObservableObject {
   @Published var metrics: HealthMetrics = HealthMetrics()
 
   private var healthCheckTimer: Timer?
+  private var healthCheckTask: Task<Void, Never>?
   private let healthCheckInterval: TimeInterval = 60.0  // Check every minute
 
   // Dependencies to monitor
@@ -21,6 +22,7 @@ class HealthMonitor: ObservableObject {
   }
 
   deinit {
+    healthCheckTask?.cancel()
     healthCheckTimer?.invalidate()
   }
 
@@ -35,15 +37,24 @@ class HealthMonitor: ObservableObject {
   private func startHealthMonitoring() {
     logger.info("Starting health monitoring")
 
-    healthCheckTimer = Timer.scheduledTimer(withTimeInterval: healthCheckInterval, repeats: true) {
-      [weak self] _ in
-      Task { @MainActor in
-        await self?.performHealthCheck()
+    healthCheckTask = Task { @MainActor in
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(Int(healthCheckInterval)))
+          if !Task.isCancelled {
+            await performHealthCheck()
+          }
+        } catch {
+          // Task was cancelled, exit the loop
+          break
+        }
       }
     }
   }
 
   private func stopHealthMonitoring() {
+    healthCheckTask?.cancel()
+    healthCheckTask = nil
     healthCheckTimer?.invalidate()
     healthCheckTimer = nil
   }

@@ -16,6 +16,7 @@ class ProductionMonitor: ObservableObject {
   // Performance metrics
   @Published var averageOverlayResponseTime: TimeInterval = 0
   private var responseTimeHistory: [TimeInterval] = []
+  private var monitoringTask: Task<Void, Never>?
 
   static let shared = ProductionMonitor()
 
@@ -79,9 +80,17 @@ class ProductionMonitor: ObservableObject {
   /// Setup performance monitoring
   private func setupPerformanceMonitoring() {
     // Monitor for high memory usage
-    Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
-      Task { @MainActor [weak self] in
-        self?.checkSystemResources()
+    monitoringTask = Task { @MainActor in
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(60))
+          if !Task.isCancelled {
+            checkSystemResources()
+          }
+        } catch {
+          // Task was cancelled, exit the loop
+          break
+        }
       }
     }
   }
@@ -127,6 +136,10 @@ class ProductionMonitor: ObservableObject {
       recentErrorCount: errorHistory.suffix(10).count,
       uptime: ProcessInfo.processInfo.systemUptime
     )
+  }
+
+  deinit {
+    monitoringTask?.cancel()
   }
 }
 

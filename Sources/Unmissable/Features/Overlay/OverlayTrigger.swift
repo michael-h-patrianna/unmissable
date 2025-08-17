@@ -11,11 +11,15 @@ class OverlayTrigger: ObservableObject {
   @Published var scheduledCount = 0
 
   private var scheduledTimers: [Timer] = []
+  private var scheduledTasks: [Task<Void, Never>] = []
 
   deinit {
-    // Clean up timers synchronously in deinit - no async calls allowed
+    // Clean up timers and tasks synchronously in deinit
     for timer in scheduledTimers {
       timer.invalidate()
+    }
+    for task in scheduledTasks {
+      task.cancel()
     }
   }
 
@@ -35,20 +39,20 @@ class OverlayTrigger: ObservableObject {
 
     logger.info("Scheduling overlay for '\(event.title)' in \(timeInterval) seconds")
 
-    // Use simple, direct timer on main queue - no nested async calls
-    let timer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: false) {
-      [weak self] timer in
-      // Execute handler with proper main actor dispatch
-      Task { @MainActor [weak self] in
-        handler()
-
-        // Clean up timer reference
-        self?.removeTimer(timer)
+    // Use async task instead of timer for better modern Swift patterns
+    let task = Task { @MainActor in
+      do {
+        try await Task.sleep(for: .seconds(timeInterval))
+        if !Task.isCancelled {
+          handler()
+        }
+      } catch {
+        // Task was cancelled
       }
     }
 
-    scheduledTimers.append(timer)
-    scheduledCount = scheduledTimers.count
+    scheduledTasks.append(task)
+    scheduledCount = scheduledTasks.count + scheduledTimers.count
 
     logger.info("Overlay scheduled. Total scheduled: \(self.scheduledCount)")
   }
@@ -69,12 +73,18 @@ class OverlayTrigger: ObservableObject {
 
   /// Cancel all scheduled overlays
   func cancelAllScheduled() {
-    logger.info("Cancelling \(self.scheduledTimers.count) scheduled overlays")
+    logger.info(
+      "Cancelling \(self.scheduledTimers.count) scheduled overlays and \(self.scheduledTasks.count) tasks"
+    )
 
     for timer in scheduledTimers {
       timer.invalidate()
     }
+    for task in scheduledTasks {
+      task.cancel()
+    }
     scheduledTimers.removeAll()
+    scheduledTasks.removeAll()
     scheduledCount = 0
   }
 
@@ -91,7 +101,12 @@ class OverlayTrigger: ObservableObject {
   private func removeTimer(_ timer: Timer) {
     if let index = scheduledTimers.firstIndex(of: timer) {
       scheduledTimers.remove(at: index)
-      scheduledCount = scheduledTimers.count
+      scheduledCount = scheduledTimers.count + scheduledTasks.count
     }
+  }
+
+  private func removeTask(_ task: Task<Void, Never>) {
+    // Tasks will clean themselves up when completed or cancelled
+    // We'll update count during cancelAllScheduled
   }
 }
