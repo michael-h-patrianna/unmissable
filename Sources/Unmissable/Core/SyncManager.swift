@@ -6,6 +6,7 @@ import OSLog
 @MainActor
 class SyncManager: ObservableObject {
   private let logger = Logger(subsystem: "com.unmissable.app", category: "SyncManager")
+  private let debugLogger = DebugLogger(subsystem: "com.unmissable.app", category: "SyncManager")
 
   @Published var syncStatus: SyncStatus = .idle
   @Published var lastSyncTime: Date?
@@ -124,6 +125,8 @@ class SyncManager: ObservableObject {
   }
 
   func performSync() async {
+    logger.info("🚀 SYNC STARTED - Beginning manual sync process")
+
     guard isOnline else {
       logger.info("Skipping sync - device is offline")
       syncStatus = .offline
@@ -160,21 +163,38 @@ class SyncManager: ObservableObject {
         return
       }
 
-      // Calculate sync window
+      // Calculate sync window - include events from earlier today to catch running meetings
       let now = Date()
+      let startOfDay = Calendar.current.startOfDay(for: now)
       let endDate = Calendar.current.date(byAdding: .day, value: eventLookAheadDays, to: now) ?? now
 
       logger.info(
-        "📅 Syncing events from \(now) to \(endDate) (\(self.eventLookAheadDays) days ahead)")
+        "📅 Syncing events from \(startOfDay) to \(endDate) (from start of today + \(self.eventLookAheadDays) days ahead)"
+      )
+
+      // CRITICAL: Clear existing events for selected calendars to remove stale data
+      logger.info("🗑️ Clearing existing events for \(selectedCalendarIds.count) calendars...")
+      for calendarId in selectedCalendarIds {
+        try await databaseManager.deleteEventsForCalendar(calendarId)
+        logger.info("🗑️ Cleared existing events for calendar: \(calendarId)")
+      }
 
       // Fetch events from API
       try await apiService.fetchEvents(
         for: selectedCalendarIds,
-        from: now,
+        from: startOfDay,  // Start from beginning of today, not "now"
         to: endDate
       )
 
       let fetchedEvents = apiService.events
+      debugLogger.info("🔄 SYNC: Got \(fetchedEvents.count) events from API")
+      
+      if let firstEvent = fetchedEvents.first {
+        debugLogger.info("🔄 SYNC: First event - \(firstEvent.title)")
+        debugLogger.info("🔄 SYNC: Description in sync: \(firstEvent.description != nil ? "YES" : "NO")")
+        debugLogger.info("🔄 SYNC: Attendees in sync: \(firstEvent.attendees.count) attendees")
+      }
+      
       logger.info("📥 API returned \(fetchedEvents.count) events")
 
       // Log details about fetched events for debugging
@@ -183,7 +203,27 @@ class SyncManager: ObservableObject {
       }
 
       // Save events to database
+      logger.info("💾 Saving \(fetchedEvents.count) events to database...")
+
+      // Log sample event details for debugging
+      for (index, event) in fetchedEvents.prefix(3).enumerated() {
+        logger.info("📝 Event \(index + 1): '\(event.title)' at \(event.startDate)")
+        logger.info(
+          "   - Description: \(event.description?.isEmpty == false ? "present (\(event.description!.count) chars)" : "none")"
+        )
+        logger.info("   - Attendees: \(event.attendees.count) attendees")
+        if !event.attendees.isEmpty {
+          logger.info(
+            "   - First attendee: \(event.attendees.first?.displayName ?? event.attendees.first?.email ?? "unknown")"
+          )
+        }
+      }
+
       try await databaseManager.saveEvents(fetchedEvents)
+
+      // Verify events were saved by checking database
+      let savedCount = try await databaseManager.fetchEvents(from: startOfDay, to: endDate).count
+      logger.info("✅ Database now contains \(savedCount) events in sync window")
 
       // Update calendar sync times
       for calendarId in selectedCalendarIds {

@@ -4,6 +4,7 @@ import OSLog
 @MainActor
 class GoogleCalendarAPIService: ObservableObject {
   private let logger = Logger(subsystem: "com.unmissable.app", category: "GoogleCalendarAPIService")
+  private let debugLogger = DebugLogger(subsystem: "com.unmissable.app", category: "GoogleCalendarAPIService")
   private let oauth2Service: OAuth2Service
 
   @Published var calendars: [CalendarInfo] = []
@@ -74,6 +75,8 @@ class GoogleCalendarAPIService: ObservableObject {
   }
 
   func fetchEvents(for calendarIds: [String], from startDate: Date, to endDate: Date) async throws {
+    debugLogger.info("🌐 API: fetchEvents called for \(calendarIds.count) calendars")
+    
     logger.info("Fetching events for \(calendarIds.count) calendars")
     isLoading = true
     lastError = nil
@@ -134,6 +137,14 @@ class GoogleCalendarAPIService: ObservableObject {
       URLQueryItem(name: "singleEvents", value: "true"),
       URLQueryItem(name: "orderBy", value: "startTime"),
       URLQueryItem(name: "maxResults", value: "250"),
+      // CRITICAL: maxAttendees required to get attendee list (defaults to truncation without this)
+      URLQueryItem(name: "maxAttendees", value: "100"),
+      // Request comprehensive event fields including description and attendees
+      URLQueryItem(
+        name: "fields",
+        value:
+          "items(id,summary,start,end,organizer,description,location,attendees,hangoutLink,conferenceData),nextPageToken"
+      ),
     ]
 
     guard let url = urlComponents.url else {
@@ -165,7 +176,8 @@ class GoogleCalendarAPIService: ObservableObject {
       }
     }
 
-    return try parseEventList(from: data, calendarId: calendarId)
+    let (events, _) = try parseEventList(from: data, calendarId: calendarId)
+    return events
   }
 
   private func parseCalendarList(from data: Data) throws -> [CalendarInfo] {
@@ -196,15 +208,33 @@ class GoogleCalendarAPIService: ObservableObject {
     }
   }
 
-  private func parseEventList(from data: Data, calendarId: String) throws -> [Event] {
+  private func parseEventList(from data: Data, calendarId: String) throws -> ([Event], String?) {
     let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
     guard let items = json?["items"] as? [[String: Any]] else {
       throw GoogleCalendarAPIError.parseError
     }
 
-    return items.compactMap { item in
+    // LOG RAW API RESPONSE for first event to see what Google actually returns
+    if let firstEvent = items.first {
+      debugLogger.info("🔍 RAW API RESPONSE for first event:")
+      debugLogger.info("   - ID: \(firstEvent["id"] as? String ?? "missing")")
+      debugLogger.info("   - Summary: \(firstEvent["summary"] as? String ?? "missing")")
+      debugLogger.info("   - Description in API: \(firstEvent["description"] != nil ? "YES" : "NO")")
+      debugLogger.info("   - Location in API: \(firstEvent["location"] != nil ? "YES" : "NO")")
+      debugLogger.info("   - Attendees in API: \(firstEvent["attendees"] != nil ? "YES" : "NO")")
+      
+      if let attendees = firstEvent["attendees"] as? [[String: Any]] {
+        debugLogger.info("   - Attendees count: \(attendees.count)")
+      }
+    }
+
+    let events = items.compactMap { item in
       parseEvent(from: item, calendarId: calendarId)
     }
+
+    let nextPageToken = json?["nextPageToken"] as? String
+
+    return (events, nextPageToken)
   }
 
   private func parseEvent(from item: [String: Any], calendarId: String) -> Event? {
@@ -253,6 +283,26 @@ class GoogleCalendarAPIService: ObservableObject {
     // Parse organizer
     let organizer = (item["organizer"] as? [String: Any])?["email"] as? String
 
+    // Parse description
+    let description = item["description"] as? String
+    if description != nil {
+      debugLogger.info("✅ DESCRIPTION found for event: \(summary)")
+    } else {
+      debugLogger.info("❌ NO DESCRIPTION for event: \(summary)")
+    }
+
+    // Parse location
+    let location = item["location"] as? String
+
+    // Parse attendees
+    let attendeesData = item["attendees"] as? [[String: Any]] ?? []
+    let attendees = parseAttendees(from: attendeesData)
+    if !attendees.isEmpty {
+      debugLogger.info("✅ ATTENDEES found for event: \(summary) - count: \(attendees.count)")
+    } else {
+      debugLogger.info("❌ NO ATTENDEES for event: \(summary) - raw data: \(attendeesData.isEmpty ? "empty" : "present but unparseable")")
+    }
+
     // Parse timezone
     let timezone = start["timeZone"] as? String ?? TimeZone.current.identifier
 
@@ -266,12 +316,37 @@ class GoogleCalendarAPIService: ObservableObject {
       startDate: startDate,
       endDate: endDate,
       organizer: organizer,
+      description: description,
+      location: location,
+      attendees: attendees,
       isAllDay: isAllDay,
       calendarId: calendarId,
       timezone: timezone,
       links: links,
       provider: provider
     )
+  }
+
+  private func parseAttendees(from attendeesData: [[String: Any]]) -> [Attendee] {
+    return attendeesData.compactMap { attendeeData in
+      guard let email = attendeeData["email"] as? String else {
+        return nil
+      }
+
+      let displayName = attendeeData["displayName"] as? String
+      let responseStatus = attendeeData["responseStatus"] as? String
+      let status = AttendeeStatus(rawValue: responseStatus ?? "needsAction")
+      let isOptional = attendeeData["optional"] as? Bool ?? false
+      let isOrganizer = attendeeData["organizer"] as? Bool ?? false
+
+      return Attendee(
+        name: displayName,
+        email: email,
+        status: status,
+        isOptional: isOptional,
+        isOrganizer: isOrganizer
+      )
+    }
   }
 
   private func parseMeetingLinks(from item: [String: Any]) -> [URL] {

@@ -6,6 +6,9 @@ struct Event: Identifiable, Codable, Equatable {
   let startDate: Date
   let endDate: Date
   let organizer: String?
+  let description: String?
+  let location: String?
+  let attendees: [Attendee]
   let isAllDay: Bool
   let calendarId: String
   let timezone: String
@@ -22,6 +25,9 @@ struct Event: Identifiable, Codable, Equatable {
     startDate: Date,
     endDate: Date,
     organizer: String? = nil,
+    description: String? = nil,
+    location: String? = nil,
+    attendees: [Attendee] = [],
     isAllDay: Bool = false,
     calendarId: String,
     timezone: String = TimeZone.current.identifier,
@@ -37,6 +43,9 @@ struct Event: Identifiable, Codable, Equatable {
     self.startDate = startDate
     self.endDate = endDate
     self.organizer = organizer
+    self.description = description
+    self.location = location
+    self.attendees = attendees
     self.isAllDay = isAllDay
     self.calendarId = calendarId
     self.timezone = timezone
@@ -79,11 +88,12 @@ struct Event: Identifiable, Codable, Equatable {
     startDate: Date,
     endDate: Date,
     organizer: String? = nil,
+    description: String? = nil,
+    location: String? = nil,
+    attendees: [Attendee] = [],
     isAllDay: Bool = false,
     calendarId: String,
     timezone: String = TimeZone.current.identifier,
-    description: String? = nil,
-    location: String? = nil,
     snoozeUntil: Date? = nil,
     autoJoinEnabled: Bool = false,
     createdAt: Date = Date(),
@@ -109,6 +119,9 @@ struct Event: Identifiable, Codable, Equatable {
       startDate: startDate,
       endDate: endDate,
       organizer: organizer,
+      description: description,
+      location: location,
+      attendees: attendees,
       isAllDay: isAllDay,
       calendarId: calendarId,
       timezone: timezone,

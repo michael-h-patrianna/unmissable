@@ -10,7 +10,7 @@ protocol OverlayManaging: ObservableObject {
   var timeUntilMeeting: TimeInterval { get }
 
   func scheduleOverlay(for event: Event, minutesBeforeMeeting: Int)
-  func showOverlay(for event: Event, minutesBeforeMeeting: Int)
+  func showOverlay(for event: Event, minutesBeforeMeeting: Int, fromSnooze: Bool)
   func hideOverlay()
   func snoozeOverlay(for minutes: Int)
   func setEventScheduler(_ scheduler: EventScheduler)
@@ -84,14 +84,15 @@ class TestSafeOverlayManager: OverlayManaging {
       Timer.scheduledTimer(withTimeInterval: timeUntilShow, repeats: false) { [weak self] _ in
         DispatchQueue.main.async {
           print("🔥 TEST-SAFE TIMER: Firing for \(event.title)")
-          self?.showOverlay(for: event, minutesBeforeMeeting: minutesBeforeMeeting)
+          self?.showOverlay(
+            for: event, minutesBeforeMeeting: minutesBeforeMeeting, fromSnooze: false)
         }
       }
     }
   }
 
-  func showOverlay(for event: Event, minutesBeforeMeeting: Int = 5) {
-    print("🎬 TEST-SAFE SHOW: Overlay for \(event.title)")
+  func showOverlay(for event: Event, minutesBeforeMeeting: Int = 5, fromSnooze: Bool = false) {
+    print("🎬 TEST-SAFE SHOW: Overlay for \(event.title), fromSnooze: \(fromSnooze)")
 
     if isTestEnvironment {
       // In test environment, just set state without creating UI

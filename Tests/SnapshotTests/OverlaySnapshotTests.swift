@@ -11,51 +11,39 @@ final class OverlaySnapshotTests: XCTestCase {
     // isRecording = true // Uncomment to record new snapshots
   }
 
-  func testOverlayContentViewLight() {
+  func testOverlayContentBeforeMeeting() {
     let event = createSampleEvent()
+    let preferencesManager = TestUtilities.MockPreferencesManager()
+
     let view = OverlayContentView(
       event: event,
       onDismiss: {},
-      onJoin: { _ in },
+      onJoin: {},
       onSnooze: { _ in }
     )
+    .environmentObject(preferencesManager)
     .frame(width: 1200, height: 800)
     .preferredColorScheme(.light)
 
-    // Skip snapshot testing for now - requires more setup
-    // assertSnapshot(matching: view, as: .image)
+    // Basic view creation test (snapshots disabled for now)
     XCTAssertNotNil(view)
   }
 
-  func testOverlayContentViewDark() {
-    let event = createSampleEvent()
+  func testOverlayContentLongMeetingTitle() {
+    let event = createSampleEventWithLongTitle()
+    let preferencesManager = TestUtilities.MockPreferencesManager()
+
     let view = OverlayContentView(
       event: event,
       onDismiss: {},
-      onJoin: { _ in },
+      onJoin: {},
       onSnooze: { _ in }
     )
-    .frame(width: 1200, height: 800)
-    .preferredColorScheme(.dark)
-
-    // Skip snapshot testing for now - requires more setup
-    // assertSnapshot(matching: view, as: .image)
-    XCTAssertNotNil(view)
-  }
-
-  func testOverlayContentViewNoMeetingLink() {
-    let event = createSampleEventWithoutLink()
-    let view = OverlayContentView(
-      event: event,
-      onDismiss: {},
-      onJoin: { _ in },
-      onSnooze: { _ in }
-    )
+    .environmentObject(preferencesManager)
     .frame(width: 1200, height: 800)
     .preferredColorScheme(.light)
 
-    // Skip snapshot testing for now - requires more setup
-    // assertSnapshot(matching: view, as: .image)
+    // Basic view creation test (snapshots disabled for now)
     XCTAssertNotNil(view)
   }
 
@@ -80,6 +68,20 @@ final class OverlaySnapshotTests: XCTestCase {
       endDate: Date().addingTimeInterval(1800),
       organizer: "jane.smith@company.com",
       calendarId: "primary"
+    )
+  }
+
+  private func createSampleEventWithLongTitle() -> Event {
+    Event(
+      id: "snapshot-test-long",
+      title:
+        "Very Important Cross-Functional Strategic Planning Meeting with Multiple Stakeholders",
+      startDate: Date().addingTimeInterval(300),
+      endDate: Date().addingTimeInterval(1800),
+      organizer: "strategic.planner@company.com",
+      calendarId: "primary",
+      links: [URL(string: "https://meet.google.com/abc-defg-hij")!],
+      provider: .meet
     )
   }
 }

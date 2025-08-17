@@ -30,7 +30,7 @@ This app requires Google Calendar API access. Choose one of these secure configu
 
 1. **Get Google OAuth credentials:**
    - Visit [Google Cloud Console](https://console.developers.google.com/)
-   - Create a new project or select existing project  
+   - Create a new project or select existing project
    - Enable the Google Calendar API
    - Create OAuth 2.0 credentials (Desktop application)
    - Copy the Client ID
@@ -40,7 +40,7 @@ This app requires Google Calendar API access. Choose one of these secure configu
    ```bash
    # Copy the template to create your config file
    cp Config.plist.example Config.plist
-   
+
    # Edit Config.plist and replace YOUR_GOOGLE_OAUTH_CLIENT_ID_HERE with your actual client ID
    ```
 
@@ -49,7 +49,7 @@ This app requires Google Calendar API access. Choose one of these secure configu
    ```bash
    swift build && swift run
    ```
-   
+
    The `Config.plist` file in the project root works automatically for both debug and release builds.
 
 #### Option 2: Environment Variable (Recommended for CI/deployment)

@@ -10,6 +10,9 @@ extension Event: FetchableRecord, PersistableRecord {
     static let startDate = Column("startDate")
     static let endDate = Column("endDate")
     static let organizer = Column("organizer")
+    static let description = Column("description")
+    static let location = Column("location")
+    static let attendees = Column("attendees")
     static let isAllDay = Column("isAllDay")
     static let calendarId = Column("calendarId")
     static let timezone = Column("timezone")
@@ -27,6 +30,19 @@ extension Event: FetchableRecord, PersistableRecord {
     startDate = row[Columns.startDate]
     endDate = row[Columns.endDate]
     organizer = row[Columns.organizer]
+    description = row[Columns.description]
+    location = row[Columns.location]
+
+    // Decode attendees from JSON string
+    let attendeesData = row[Columns.attendees] as? String ?? "[]"
+    if let data = attendeesData.data(using: .utf8),
+      let decodedAttendees = try? JSONDecoder().decode([Attendee].self, from: data)
+    {
+      attendees = decodedAttendees
+    } else {
+      attendees = []
+    }
+
     isAllDay = row[Columns.isAllDay]
     calendarId = row[Columns.calendarId]
     timezone = row[Columns.timezone]
@@ -60,6 +76,18 @@ extension Event: FetchableRecord, PersistableRecord {
     container[Columns.startDate] = startDate
     container[Columns.endDate] = endDate
     container[Columns.organizer] = organizer
+    container[Columns.description] = description
+    container[Columns.location] = location
+
+    // Encode attendees as JSON string
+    if let data = try? JSONEncoder().encode(attendees),
+      let jsonString = String(data: data, encoding: .utf8)
+    {
+      container[Columns.attendees] = jsonString
+    } else {
+      container[Columns.attendees] = "[]"
+    }
+
     container[Columns.isAllDay] = isAllDay
     container[Columns.calendarId] = calendarId
     container[Columns.timezone] = timezone

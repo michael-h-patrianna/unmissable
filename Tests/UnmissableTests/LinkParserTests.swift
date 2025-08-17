@@ -76,14 +76,14 @@ final class LinkParserTests: XCTestCase {
       title: "Team Meeting",
       startDate: Date(),
       endDate: Date().addingTimeInterval(3600),
-      calendarId: "primary",
       description: "Join us at https://meet.google.com/abc-defg-hij",
-      location: "Google Meet"
+      location: "Google Meet",
+      calendarId: "primary"
     )
 
     XCTAssertTrue(event.isOnlineMeeting)
     XCTAssertEqual(event.links.count, 1)
-    XCTAssertEqual(event.provider, .meet)
+    XCTAssertEqual(event.provider, Provider.meet)
     XCTAssertEqual(event.primaryLink?.absoluteString, "https://meet.google.com/abc-defg-hij")
   }
 }

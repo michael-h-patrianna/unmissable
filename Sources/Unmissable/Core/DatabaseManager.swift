@@ -4,8 +4,9 @@ import OSLog
 
 class DatabaseManager: ObservableObject {
   private let logger = Logger(subsystem: "com.unmissable.app", category: "DatabaseManager")
+  private let debugLogger = DebugLogger(subsystem: "com.unmissable.app", category: "DatabaseManager")
   private var dbQueue: DatabaseQueue?
-  private let currentSchemaVersion = 1
+  private let currentSchemaVersion = 2
 
   static let shared = DatabaseManager()
 
@@ -103,6 +104,14 @@ class DatabaseManager: ObservableObject {
     case 1:
       // Initial version, no migration needed
       break
+    case 2:
+      // Add description, location, and attendees columns to events table
+      try db.alter(table: Event.databaseTableName) { t in
+        t.add(column: "description", .text)
+        t.add(column: "location", .text)
+        t.add(column: "attendees", .text).notNull().defaults(to: "[]")
+      }
+      logger.info("Migrated to version 2: Added description, location, and attendees columns")
     default:
       throw DatabaseError.migrationFailed("Unknown migration version: \(version)")
     }
@@ -116,6 +125,9 @@ class DatabaseManager: ObservableObject {
       t.column("startDate", .datetime).notNull()
       t.column("endDate", .datetime).notNull()
       t.column("organizer", .text)
+      t.column("description", .text)
+      t.column("location", .text)
+      t.column("attendees", .text).notNull().defaults(to: "[]")
       t.column("isAllDay", .boolean).notNull().defaults(to: false)
       t.column("calendarId", .text).notNull()
       t.column("timezone", .text).notNull()
@@ -180,6 +192,15 @@ class DatabaseManager: ObservableObject {
       throw DatabaseError.notInitialized
     }
 
+    // Log first event being saved to verify data
+    if let firstEvent = events.first {
+      debugLogger.info("💾 SAVING EVENT TO DATABASE:")
+      debugLogger.info("   - Title: \(firstEvent.title)")
+      debugLogger.info("   - Description being saved: \(firstEvent.description != nil ? "YES (\(firstEvent.description!.count) chars)" : "NO")")
+      debugLogger.info("   - Location being saved: \(firstEvent.location != nil ? "YES" : "NO")")
+      debugLogger.info("   - Attendees being saved: \(firstEvent.attendees.count) attendees")
+    }
+
     try await dbQueue.write { db in
       for event in events {
         try event.save(db)
@@ -209,13 +230,24 @@ class DatabaseManager: ObservableObject {
     }
 
     let now = Date()
-    return try await dbQueue.read { db in
+    let events = try await dbQueue.read { db in
       try Event
         .filter(Event.Columns.startDate > now)
         .order(Event.Columns.startDate)
         .limit(limit)
         .fetchAll(db)
     }
+    
+    // Log first fetched event to verify data retrieval
+    if let firstEvent = events.first {
+      debugLogger.info("📤 FETCHED EVENT FROM DATABASE:")
+      debugLogger.info("   - Title: \(firstEvent.title)")
+      debugLogger.info("   - Description fetched: \(firstEvent.description != nil ? "YES (\(firstEvent.description!.count) chars)" : "NO")")
+      debugLogger.info("   - Location fetched: \(firstEvent.location != nil ? "YES" : "NO")")
+      debugLogger.info("   - Attendees fetched: \(firstEvent.attendees.count) attendees")
+    }
+    
+    return events
   }
 
   func deleteEventsForCalendar(_ calendarId: String) async throws {
@@ -245,6 +277,38 @@ class DatabaseManager: ObservableObject {
 
     logger.info("Deleted \(deletedCount) old events")
   }
+
+  #if DEBUG
+    /// Delete events matching a specific ID pattern (for testing only)
+    func deleteTestEvents(withIdPattern pattern: String) async throws {
+      guard let dbQueue = dbQueue else {
+        throw DatabaseError.notInitialized
+      }
+
+      let deletedCount = try await dbQueue.write { db in
+        try Event
+          .filter(Event.Columns.id.like("%\(pattern)%"))
+          .deleteAll(db)
+      }
+
+      logger.info("Deleted \(deletedCount) test events with pattern: \(pattern)")
+    }
+
+    /// Delete test calendars matching a name pattern (for testing only)
+    func deleteTestCalendars(withNamePattern pattern: String) async throws {
+      guard let dbQueue = dbQueue else {
+        throw DatabaseError.notInitialized
+      }
+
+      let deletedCount = try await dbQueue.write { db in
+        try CalendarInfo
+          .filter(CalendarInfo.Columns.name.like("%\(pattern)%"))
+          .deleteAll(db)
+      }
+
+      logger.info("Deleted \(deletedCount) test calendars with pattern: \(pattern)")
+    }
+  #endif
 
   func searchEvents(query: String) async throws -> [Event] {
     guard let dbQueue = dbQueue else {

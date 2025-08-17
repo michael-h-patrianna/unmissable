@@ -26,15 +26,15 @@ final class DatabaseManagerComprehensiveTests: XCTestCase {
   }
 
   private func cleanupTestData() async throws {
-    // Remove any test events we might have created
-    _ = try await databaseManager.fetchEvents(
-      from: Date().addingTimeInterval(-86400),  // 1 day ago
-      to: Date().addingTimeInterval(86400)  // 1 day from now
-    )
+    // Clean up test events by pattern
+    try await databaseManager.deleteTestEvents(withIdPattern: "perf-test")
+    try await databaseManager.deleteTestEvents(withIdPattern: "memory-test")
+    try await databaseManager.deleteTestEvents(withIdPattern: "fetch-perf")
+    try await databaseManager.deleteTestEvents(withIdPattern: "test-save")
+    try await databaseManager.deleteTestEvents(withIdPattern: "test-event")
 
-    // Note: The real DatabaseManager doesn't have deleteEvent methods
-    // so we can't clean up individual events. This is a limitation for testing.
-    // In a real scenario, we'd need additional test-friendly methods.
+    // Clean up test calendars
+    try await databaseManager.deleteTestCalendars(withNamePattern: "Test Calendar")
   }
 
   // MARK: - Basic Event Operations Tests
@@ -179,6 +179,9 @@ final class DatabaseManagerComprehensiveTests: XCTestCase {
 
     let testEvents = fetchedEvents.filter { $0.id.hasPrefix("perf-test") }
     XCTAssertEqual(testEvents.count, numberOfEvents)
+
+    // Clean up test events immediately
+    try await databaseManager.deleteTestEvents(withIdPattern: "perf-test")
   }
 
   func testFetchPerformance() async throws {
@@ -198,6 +201,9 @@ final class DatabaseManagerComprehensiveTests: XCTestCase {
 
     XCTAssertLessThan(fetchTime, 1.0, "Fetching upcoming events should take less than 1 second")
     XCTAssertGreaterThan(fetchedEvents.count, 0)
+
+    // Clean up test events immediately
+    try await databaseManager.deleteTestEvents(withIdPattern: "fetch-perf")
   }
 
   // MARK: - Search Tests
@@ -288,5 +294,8 @@ final class DatabaseManagerComprehensiveTests: XCTestCase {
 
     // Memory should be reasonable (this is more of a manual check)
     // In a real test environment, we could monitor memory usage
+
+    // Clean up test events immediately
+    try await databaseManager.deleteTestEvents(withIdPattern: "memory-test")
   }
 }

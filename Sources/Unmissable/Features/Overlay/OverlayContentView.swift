@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 struct OverlayContentView: View {
@@ -5,9 +6,25 @@ struct OverlayContentView: View {
   let onDismiss: () -> Void
   let onJoin: () -> Void
   let onSnooze: (Int) -> Void
+  let isFromSnooze: Bool
 
   @EnvironmentObject private var preferences: PreferencesManager
-  @EnvironmentObject private var overlayManager: OverlayManager
+  @State private var timeUntilMeeting: TimeInterval = 0
+  @State private var timerCancellable: AnyCancellable?
+
+  init(
+    event: Event,
+    onDismiss: @escaping () -> Void,
+    onJoin: @escaping () -> Void,
+    onSnooze: @escaping (Int) -> Void,
+    isFromSnooze: Bool = false
+  ) {
+    self.event = event
+    self.onDismiss = onDismiss
+    self.onJoin = onJoin
+    self.onSnooze = onSnooze
+    self.isFromSnooze = isFromSnooze
+  }
 
   var body: some View {
     ZStack {
@@ -19,13 +36,17 @@ struct OverlayContentView: View {
       VStack(spacing: 40 * fontScale) {
         // Header
         VStack(spacing: 16 * fontScale) {
-          Image(systemName: "calendar.badge.clock")
-            .font(.system(size: 48 * fontScale))
-            .foregroundColor(.blue)
+          Image(
+            systemName: timeUntilMeeting > 0
+              ? "calendar.badge.clock" : "calendar.badge.exclamationmark"
+          )
+          .font(.system(size: 48 * fontScale))
+          .foregroundColor(timeUntilMeeting > 0 ? .blue : .orange)
 
-          Text("Upcoming Meeting")
+          Text(headerText)
             .font(.system(size: 36 * fontScale, weight: .bold))
             .foregroundColor(textColor)
+            .accessibilityLabel(headerText)
         }
 
         // Meeting Details
@@ -60,37 +81,44 @@ struct OverlayContentView: View {
 
         // Countdown Display
         VStack(spacing: 12 * fontScale) {
-          if overlayManager.timeUntilMeeting > 0 {
+          if timeUntilMeeting > 0 {
             Text("Starting in")
               .font(.system(size: 24 * fontScale))
               .foregroundColor(.gray)
               .accessibilityHidden(true)
 
-            Text(formatTimeRemaining(overlayManager.timeUntilMeeting))
+            Text(formatTimeRemaining(timeUntilMeeting))
               .font(.system(size: 88 * fontScale, weight: .bold, design: .monospaced))
-              .foregroundColor(overlayManager.timeUntilMeeting < 60 ? .red : .blue)
-              .animation(.easeInOut(duration: 0.3), value: overlayManager.timeUntilMeeting < 60)
+              .foregroundColor(timeUntilMeeting < 60 ? .red : .blue)
+              .animation(.easeInOut(duration: 0.3), value: timeUntilMeeting < 60)
               .accessibilityLabel(
-                "Meeting starts in \(formatTimeRemainingForAccessibility(overlayManager.timeUntilMeeting))"
+                "Meeting starts in \(formatTimeRemainingForAccessibility(timeUntilMeeting))"
               )
 
-          } else if overlayManager.timeUntilMeeting > -300 {
+          } else if timeUntilMeeting > -300 {
             Text("Meeting Started")
               .font(.system(size: 36 * fontScale, weight: .bold))
               .foregroundColor(.red)
               .accessibilityLabel("Meeting has started")
 
-            Text("\(Int(-overlayManager.timeUntilMeeting / 60)) minutes ago")
+            Text("\(Int(-timeUntilMeeting / 60)) minutes ago")
               .font(.system(size: 24 * fontScale))
               .foregroundColor(.orange)
               .accessibilityLabel(
-                "Started \(Int(-overlayManager.timeUntilMeeting / 60)) minutes ago")
+                "Started \(Int(-timeUntilMeeting / 60)) minutes ago")
 
           } else {
-            Text("Meeting has been running")
-              .font(.system(size: 28 * fontScale, weight: .bold))
+            Text("Running for")
+              .font(.system(size: 24 * fontScale))
+              .foregroundColor(.gray)
+              .accessibilityHidden(true)
+
+            Text(formatTimeRunning(-timeUntilMeeting))
+              .font(.system(size: 48 * fontScale, weight: .bold))
               .foregroundColor(.orange)
-              .accessibilityLabel("Meeting has been running for several minutes")
+              .accessibilityLabel(
+                "Meeting has been running for \(formatTimeRunningForAccessibility(-timeUntilMeeting))"
+              )
           }
         }
         .padding(.vertical, 20)
@@ -176,6 +204,22 @@ struct OverlayContentView: View {
       }
       .padding(40)
     }
+    .onAppear {
+      // Initialize timer on appear
+      timeUntilMeeting = event.startDate.timeIntervalSinceNow
+
+      // Start timer with proper lifecycle management
+      timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
+        .autoconnect()
+        .sink { _ in
+          timeUntilMeeting = event.startDate.timeIntervalSinceNow
+        }
+    }
+    .onDisappear {
+      // Clean up timer
+      timerCancellable?.cancel()
+      timerCancellable = nil
+    }
     .onKeyPress(.escape) {
       onDismiss()
       return .handled
@@ -186,6 +230,16 @@ struct OverlayContentView: View {
 
   private var fontScale: Double {
     preferences.fontSize.scale
+  }
+
+  private var headerText: String {
+    if timeUntilMeeting > 0 {
+      return isFromSnooze ? "Snoozed Meeting Reminder" : "Upcoming Meeting"
+    } else if timeUntilMeeting > -300 {
+      return isFromSnooze ? "Snoozed: Meeting in Progress" : "Meeting in Progress"
+    } else {
+      return isFromSnooze ? "Snoozed: Ongoing Meeting" : "Ongoing Meeting"
+    }
   }
 
   private var backgroundColor: Color {
@@ -219,6 +273,18 @@ struct OverlayContentView: View {
     return String(format: "%02d:%02d", minutes, seconds)
   }
 
+  private func formatTimeRunning(_ interval: TimeInterval) -> String {
+    let totalSeconds = Int(interval)
+    let hours = totalSeconds / 3600
+    let minutes = (totalSeconds % 3600) / 60
+
+    if hours > 0 {
+      return String(format: "%dh %02dm", hours, minutes)
+    } else {
+      return String(format: "%d min", minutes)
+    }
+  }
+
   private func formatTimeRemainingForAccessibility(_ interval: TimeInterval) -> String {
     let totalSeconds = Int(abs(interval))
     let minutes = totalSeconds / 60
@@ -232,6 +298,23 @@ struct OverlayContentView: View {
       }
     } else {
       return "\(seconds) second\(seconds == 1 ? "" : "s")"
+    }
+  }
+
+  private func formatTimeRunningForAccessibility(_ interval: TimeInterval) -> String {
+    let totalSeconds = Int(interval)
+    let hours = totalSeconds / 3600
+    let minutes = (totalSeconds % 3600) / 60
+
+    if hours > 0 {
+      if minutes > 0 {
+        return
+          "\(hours) hour\(hours == 1 ? "" : "s") and \(minutes) minute\(minutes == 1 ? "" : "s")"
+      } else {
+        return "\(hours) hour\(hours == 1 ? "" : "s")"
+      }
+    } else {
+      return "\(minutes) minute\(minutes == 1 ? "" : "s")"
     }
   }
 }
@@ -251,10 +334,10 @@ struct ScaleButtonStyle: ButtonStyle {
 #Preview("Overlay Content - Before Meeting") {
   let sampleEvent = Event(
     id: "preview-1",
-    title: "Team Standup - Weekly Review",
+    title: "Daily Team Standup with Engineering Team",
     startDate: Date().addingTimeInterval(300),  // 5 minutes from now
-    endDate: Date().addingTimeInterval(1800),  // 30 minutes from now
-    organizer: "john@company.com",
+    endDate: Date().addingTimeInterval(1200),
+    organizer: "team-lead@company.com",
     calendarId: "primary",
     links: [URL(string: "https://meet.google.com/abc-defg-hij")!]
   )
@@ -263,7 +346,8 @@ struct ScaleButtonStyle: ButtonStyle {
     event: sampleEvent,
     onDismiss: {},
     onJoin: {},
-    onSnooze: { _ in }
+    onSnooze: { _ in },
+    isFromSnooze: false
   )
 }
 
@@ -282,6 +366,27 @@ struct ScaleButtonStyle: ButtonStyle {
     event: sampleEvent,
     onDismiss: {},
     onJoin: {},
-    onSnooze: { _ in }
+    onSnooze: { _ in },
+    isFromSnooze: false
+  )
+}
+
+#Preview("Overlay Content - Snoozed Meeting Running") {
+  let sampleEvent = Event(
+    id: "preview-3",
+    title: "Snoozed Team Meeting",
+    startDate: Date().addingTimeInterval(-900),  // Started 15 minutes ago
+    endDate: Date().addingTimeInterval(1800),
+    organizer: "team@company.com",
+    calendarId: "primary",
+    links: [URL(string: "https://meet.google.com/xyz-uvwx-stu")!]
+  )
+
+  OverlayContentView(
+    event: sampleEvent,
+    onDismiss: {},
+    onJoin: {},
+    onSnooze: { _ in },
+    isFromSnooze: true
   )
 }

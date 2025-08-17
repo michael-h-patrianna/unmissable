@@ -256,7 +256,7 @@ class EventScheduler: ObservableObject {
       switch alert.alertType {
       case .reminder:
         logger.info("📱 REMINDER: Showing overlay for \(alert.event.title)")
-        overlayManager.showOverlay(for: alert.event)
+        overlayManager.showOverlay(for: alert.event, fromSnooze: false)
 
       case .meetingStart:
         if preferencesManager.autoJoinEnabled, let url = alert.event.primaryLink {
@@ -266,7 +266,8 @@ class EventScheduler: ObservableObject {
 
       case .snooze:
         logger.info("⏰ SNOOZE: Re-showing overlay for \(alert.event.title)")
-        overlayManager.showOverlay(for: alert.event)
+        // SNOOZE FIX: Mark overlay as coming from snooze alert
+        overlayManager.showOverlay(for: alert.event, fromSnooze: true)
       }
     }
 

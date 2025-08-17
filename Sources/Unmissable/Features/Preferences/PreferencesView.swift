@@ -359,7 +359,7 @@ struct CalendarPreferencesView: View {
                   .font(design.fonts.headline)
                   .foregroundColor(design.colors.textPrimary)
 
-                VStack(spacing: design.spacing.sm) {
+                VStack(alignment: .leading, spacing: design.spacing.sm) {
                   ForEach(appState.calendars) { calendar in
                     CalendarSelectionRow(
                       calendar: calendar,
@@ -369,6 +369,7 @@ struct CalendarPreferencesView: View {
                     )
                   }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
               }
               .padding(design.spacing.lg)
             }
@@ -444,7 +445,7 @@ struct CalendarSelectionRow: View {
   @Environment(\.customDesign) private var design
 
   var body: some View {
-    HStack(spacing: design.spacing.md) {
+    HStack(alignment: .top, spacing: design.spacing.md) {
       CustomToggle(
         isOn: Binding(
           get: { calendar.isSelected },
@@ -453,7 +454,7 @@ struct CalendarSelectionRow: View {
       )
 
       VStack(alignment: .leading, spacing: design.spacing.xs) {
-        HStack(spacing: design.spacing.sm) {
+        HStack(alignment: .top, spacing: design.spacing.sm) {
           Text(calendar.name)
             .font(design.fonts.callout)
             .foregroundColor(design.colors.textPrimary)
@@ -467,6 +468,8 @@ struct CalendarSelectionRow: View {
               .background(design.colors.accent.opacity(0.1))
               .cornerRadius(design.corners.small)
           }
+
+          Spacer()
         }
 
         if let description = calendar.description, !description.isEmpty {
@@ -477,9 +480,8 @@ struct CalendarSelectionRow: View {
             .fixedSize(horizontal: false, vertical: true)
         }
       }
-
-      Spacer()
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
     .padding(design.spacing.md)
     .background(design.colors.backgroundSecondary)
     .cornerRadius(design.corners.medium)

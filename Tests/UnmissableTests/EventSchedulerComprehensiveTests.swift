@@ -396,7 +396,9 @@ class MockOverlayManager: OverlayManager {
   var onHideOverlay: (() -> Void)?
   var onScheduleOverlay: ((Event, Int) -> Void)?
 
-  override func showOverlay(for event: Event, minutesBeforeMeeting: Int = 5) {
+  override func showOverlay(
+    for event: Event, minutesBeforeMeeting: Int = 5, fromSnooze: Bool = false
+  ) {
     onShowOverlay?(event)
   }
 

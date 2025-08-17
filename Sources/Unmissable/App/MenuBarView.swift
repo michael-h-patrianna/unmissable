@@ -236,8 +236,13 @@ struct MenuBarView: View {
 
                     // Group events
                     ForEach(group.events.prefix(3)) { event in
-                      CustomEventRow(event: event)
-                        .padding(.horizontal, design.spacing.lg)
+                      CustomEventRow(
+                        event: event,
+                        onEventTap: {
+                          appState.showMeetingDetails(for: event)
+                        }
+                      )
+                      .padding(.horizontal, design.spacing.lg)
                     }
                   }
                 }
@@ -318,7 +323,14 @@ struct MenuBarView: View {
 
 struct CustomEventRow: View {
   let event: Event
+  let onEventTap: (() -> Void)?
   @Environment(\.customDesign) private var design
+  @State private var isHovered = false
+
+  init(event: Event, onEventTap: (() -> Void)? = nil) {
+    self.event = event
+    self.onEventTap = onEventTap
+  }
 
   var body: some View {
     CustomCard(style: .standard) {
@@ -358,6 +370,20 @@ struct CustomEventRow: View {
         }
       }
       .padding(design.spacing.md)
+      .background(
+        isHovered ? design.colors.accent.opacity(0.05) : Color.clear
+      )
+      .onHover { hovering in
+        withAnimation(.easeInOut(duration: 0.2)) {
+          isHovered = hovering
+        }
+      }
+      .onTapGesture {
+        onEventTap?()
+      }
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel("Meeting: \(event.title) at \(event.startDate, style: .time)")
+      .accessibilityHint("Tap to view meeting details")
     }
   }
 }

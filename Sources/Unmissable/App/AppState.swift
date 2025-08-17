@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import OSLog
@@ -30,6 +31,7 @@ class AppState: ObservableObject {
   private let focusModeManager: FocusModeManager
   private let healthMonitor = HealthMonitor()
   private let menuBarPreviewManager: MenuBarPreviewManager
+  private let meetingDetailsPopupManager = MeetingDetailsPopupManager()
   private lazy var preferencesWindowManager = PreferencesWindowManager(appState: self)
 
   private var cancellables = Set<AnyCancellable>()
@@ -217,6 +219,10 @@ class AppState: ObservableObject {
 
   func showPreferences() {
     preferencesWindowManager.showPreferences()
+  }
+
+  func showMeetingDetails(for event: Event, relativeTo parentWindow: NSWindow? = nil) {
+    meetingDetailsPopupManager.showPopup(for: event, relativeTo: parentWindow)
   }
 
   private func startPeriodicSync() async {
