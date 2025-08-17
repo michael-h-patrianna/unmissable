@@ -1,26 +1,21 @@
-# Beast Tasks - Join Button 10-Minute Window
+# Beast Tasks
 
-## Phase 1: UNDERSTAND & PLAN [✓]
+## Phase 1: UNDERSTAND & PLAN
+- [ ] Read doc.md for app context
+- [ ] Analyze current project structure  
+- [ ] Research macOS app bundle requirements
+- [ ] Plan configuration persistence strategy
+- [ ] Define release build requirements
 
-- [✓] Analyze current join button logic in CustomEventRow
-- [✓] Identify real-time update mechanism for MenuBarView
-- [✓] Plan 10-minute window logic for both upcoming and started meetings
-- [✓] Design test strategy for time-based button visibility
+## Phase 2: IMPLEMENT SOLUTION
+- [ ] Configure app bundle structure
+- [ ] Implement configuration persistence
+- [ ] Create release build configuration
+- [ ] Set up auto-launch capability
+- [ ] Generate .app bundle
 
-## Phase 2: IMPLEMENT SOLUTION [✓]
-
-- [✓] Add 10-minute window logic to Event model (shouldShowJoinButton computed property)
-- [✓] Update CustomEventRow to conditionally show join button based on time
-- [✓] Ensure real-time updates via 30-second UI refresh timer in CalendarService
-- [✓] Test button appears exactly 10 minutes before meeting
-- [✓] Test button remains available during started meetings
-- [✓] Update existing tests to account for new join button logic
-
-## Phase 3: VALIDATE & ITERATE [✓]
-
-- [✓] Test join button appears at T-10 minutes for upcoming meetings
-- [✓] Test join button remains visible for started meetings
-- [✓] Test join button disappears for meetings >10 minutes away
-- [✓] Verify real-time updates work correctly (30-second timer implemented)
-- [✓] Test with multiple meetings at different time windows
-- [✓] Validate new test passes with 10-minute window logic
+## Phase 3: VALIDATE & ITERATE
+- [ ] Test app bundle functionality
+- [ ] Verify configuration persistence
+- [ ] Test auto-launch capability
+- [ ] Validate installation process
