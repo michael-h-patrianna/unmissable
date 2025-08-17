@@ -32,12 +32,14 @@ class MeetingDetailsEndToEndTests: XCTestCase {
       attendees: [
         Attendee(
           name: "Test Organizer", email: "organizer@example.com", status: .accepted,
-          isOrganizer: true),
-        Attendee(name: "Required Attendee", email: "required@example.com", status: .accepted),
+          isOrganizer: true, isSelf: false),
+        Attendee(
+          name: "Required Attendee", email: "required@example.com", status: .accepted, isSelf: false
+        ),
         Attendee(
           name: "Optional Attendee", email: "optional@example.com", status: .tentative,
-          isOptional: true),
-        Attendee(email: "pending@example.com", status: .needsAction),
+          isOptional: true, isSelf: false),
+        Attendee(email: "pending@example.com", status: .needsAction, isSelf: false),
       ],
       calendarId: "primary",
       links: [URL(string: "https://meet.google.com/end-to-end-test")!]
@@ -66,7 +68,8 @@ class MeetingDetailsEndToEndTests: XCTestCase {
         description: "Description for meeting \(index)",
         attendees: [
           Attendee(
-            name: "Attendee \(index)", email: "attendee\(index)@example.com", status: .accepted)
+            name: "Attendee \(index)", email: "attendee\(index)@example.com", status: .accepted,
+            isSelf: false)
         ],
         calendarId: "primary"
       )
@@ -103,8 +106,8 @@ class MeetingDetailsEndToEndTests: XCTestCase {
       description: "This event tests database persistence of new fields.",
       location: "Test Location",
       attendees: [
-        Attendee(name: "DB Tester", email: "tester@example.com", status: .accepted),
-        Attendee(email: "guest@example.com", status: .tentative, isOptional: true),
+        Attendee(name: "DB Tester", email: "tester@example.com", status: .accepted, isSelf: false),
+        Attendee(email: "guest@example.com", status: .tentative, isOptional: true, isSelf: false),
       ],
       calendarId: "test-calendar"
     )
@@ -142,7 +145,8 @@ class MeetingDetailsEndToEndTests: XCTestCase {
       Attendee(
         name: "Attendee \(index)",
         email: "attendee\(index)@example.com",
-        status: AttendeeStatus.allCases.randomElement()!
+        status: AttendeeStatus.allCases.randomElement()!,
+        isSelf: false
       )
     }
 

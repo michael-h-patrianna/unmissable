@@ -35,15 +35,27 @@ class OAuth2Service: ObservableObject {
   }
 
   @objc private func handleOAuthCallback(_ notification: Notification) {
-    guard let url = notification.object as? URL else { return }
+    guard let url = notification.object as? URL else {
+      logger.error("❌ OAuth callback notification missing URL")
+      return
+    }
 
-    logger.info("Handling OAuth callback URL: \(url)")
+    logger.info("📥 Handling OAuth callback URL: \(url)")
+    logger.info("   Scheme: \(url.scheme ?? "nil")")
+    logger.info("   Host: \(url.host ?? "nil")")
+    logger.info("   Query: \(url.query ?? "nil")")
 
     // Handle the callback URL with AppAuth
     if let currentAuthFlow = self.currentAuthorizationFlow {
+      logger.info("✅ Found active authorization flow, resuming...")
       if currentAuthFlow.resumeExternalUserAgentFlow(with: url) {
+        logger.info("🎉 Successfully resumed authorization flow")
         self.currentAuthorizationFlow = nil
+      } else {
+        logger.error("❌ Failed to resume authorization flow with URL")
       }
+    } else {
+      logger.warning("⚠️ No active authorization flow found - callback may have arrived too late")
     }
   }
 
@@ -52,18 +64,24 @@ class OAuth2Service: ObservableObject {
   // MARK: - Public Interface
 
   func startAuthorizationFlow() async throws {
-    logger.info("Starting OAuth 2.0 authorization flow")
+    logger.info("🚀 Starting OAuth 2.0 authorization flow")
 
     guard GoogleCalendarConfig.validateConfiguration() else {
       let error =
         "OAuth configuration not properly set up. Please configure your Google OAuth client ID."
-      logger.error("\(error)")
+      logger.error("❌ \(error)")
       authorizationError = error
       throw OAuth2Error.configurationError(error)
     }
 
     // Clear any existing error
     authorizationError = nil
+
+    // Enhanced logging for debugging
+    logger.info("📋 OAuth Configuration:")
+    logger.info("   Client ID: \(GoogleCalendarConfig.clientId)")
+    logger.info("   Redirect URI: \(GoogleCalendarConfig.redirectURI)")
+    logger.info("   Scopes: \(GoogleCalendarConfig.scopes.joined(separator: ", "))")
 
     // Create service configuration
     let configuration = OIDServiceConfiguration(
@@ -84,16 +102,35 @@ class OAuth2Service: ObservableObject {
 
     // Perform authorization request
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      // Enhanced logging for debugging
+      logger.info("🌐 Creating authorization request...")
+      logger.info("   Authorization URL: \(request.authorizationRequestURL())")
+
       // Use external user agent (browser) for authorization
-      // Create a minimal window as fallback if no key window exists
-      let fallbackWindow = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
-        styleMask: .borderless,
-        backing: .buffered,
-        defer: false
-      )
-      let presentingWindow = NSApplication.shared.keyWindow ?? fallbackWindow
+      // For menu bar apps, we need to ensure we have a proper presenting window
+      let presentingWindow: NSWindow
+      if let keyWindow = NSApplication.shared.keyWindow {
+        presentingWindow = keyWindow
+        logger.info("🪟 Using key window for OAuth presentation")
+      } else if let mainWindow = NSApplication.shared.mainWindow {
+        presentingWindow = mainWindow
+        logger.info("🪟 Using main window for OAuth presentation")
+      } else {
+        // Create a proper window for OAuth presentation
+        presentingWindow = NSWindow(
+          contentRect: NSRect(x: 100, y: 100, width: 400, height: 300),
+          styleMask: [.titled, .closable],
+          backing: .buffered,
+          defer: false
+        )
+        presentingWindow.title = "Unmissable OAuth"
+        presentingWindow.makeKeyAndOrderFront(nil)
+        logger.info("🪟 Created dedicated OAuth window")
+      }
+
       let userAgent = OIDExternalUserAgentMac(presenting: presentingWindow)
+
+      logger.info("🔑 Presenting authorization in browser...")
 
       self.currentAuthorizationFlow = OIDAuthorizationService.present(
         request,
@@ -103,11 +140,13 @@ class OAuth2Service: ObservableObject {
           self?.currentAuthorizationFlow = nil
 
           if let error = error {
-            self?.logger.error("Authorization failed: \(error.localizedDescription)")
-            self?.authorizationError = error.localizedDescription
+            self?.logger.error("❌ Authorization failed: \(error.localizedDescription)")
+            self?.logger.error("   Error domain: \((error as NSError).domain)")
+            self?.logger.error("   Error code: \((error as NSError).code)")
+            self?.authorizationError = "Authorization failed: \(error.localizedDescription)"
             continuation.resume(throwing: OAuth2Error.authorizationFailed(error))
           } else if let authResponse = authorizationResponse {
-            self?.logger.info("Authorization successful, exchanging code for tokens")
+            self?.logger.info("✅ Authorization successful, exchanging code for tokens")
 
             // Exchange authorization code for tokens
             OIDAuthorizationService.perform(
@@ -115,10 +154,12 @@ class OAuth2Service: ObservableObject {
             ) { tokenResponse, tokenError in
               Task { @MainActor in
                 if let tokenError = tokenError {
-                  self?.logger.error("Token exchange failed: \(tokenError.localizedDescription)")
-                  self?.authorizationError = tokenError.localizedDescription
+                  self?.logger.error("❌ Token exchange failed: \(tokenError.localizedDescription)")
+                  self?.authorizationError =
+                    "Token exchange failed: \(tokenError.localizedDescription)"
                   continuation.resume(throwing: OAuth2Error.authorizationFailed(tokenError))
                 } else if let tokenResponse = tokenResponse {
+                  self?.logger.info("🎉 Token exchange successful!")
                   // Create auth state with both responses
                   self?.authState = OIDAuthState(
                     authorizationResponse: authResponse, tokenResponse: tokenResponse)
@@ -136,13 +177,34 @@ class OAuth2Service: ObservableObject {
               }
             }
           } else {
+            self?.logger.error("❌ Unknown authorization error - no response received")
             let error = OAuth2Error.authorizationFailed(
               NSError(
                 domain: "OAuth2Service", code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "Unknown authorization error"]))
+                userInfo: [
+                  NSLocalizedDescriptionKey:
+                    "Unknown authorization error - no response received. This may be due to corporate security policies or browser restrictions."
+                ]))
+            self?.authorizationError =
+              "Authorization failed - no response received. Please check if your browser is blocking redirects or if corporate policies are interfering."
             continuation.resume(throwing: error)
           }
         }
+      }
+
+      // Add a safety check - if the flow didn't start properly
+      if self.currentAuthorizationFlow == nil {
+        logger.error("❌ Failed to start authorization flow - currentAuthorizationFlow is nil")
+        let error = OAuth2Error.authorizationFailed(
+          NSError(
+            domain: "OAuth2Service", code: -2,
+            userInfo: [
+              NSLocalizedDescriptionKey:
+                "Failed to start authorization flow. This may be due to browser restrictions or corporate security policies."
+            ]))
+        authorizationError =
+          "Failed to start OAuth flow. Please ensure your default browser is available and not blocked by corporate policies."
+        continuation.resume(throwing: error)
       }
     }
   }

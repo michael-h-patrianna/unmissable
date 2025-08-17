@@ -140,11 +140,11 @@ class GoogleCalendarAPIService: ObservableObject {
       URLQueryItem(name: "maxResults", value: "250"),
       // CRITICAL: maxAttendees required to get attendee list (defaults to truncation without this)
       URLQueryItem(name: "maxAttendees", value: "100"),
-      // Request comprehensive event fields including description, attendees, and attachments
+      // Request comprehensive event fields including description, attendees, attachments, and status
       URLQueryItem(
         name: "fields",
         value:
-          "items(id,summary,start,end,organizer,description,location,attendees,attachments,hangoutLink,conferenceData),nextPageToken"
+          "items(id,summary,start,end,organizer,description,location,attendees,attachments,hangoutLink,conferenceData,status),nextPageToken"
       ),
     ]
 
@@ -234,17 +234,31 @@ class GoogleCalendarAPIService: ObservableObject {
       parseEvent(from: item, calendarId: calendarId)
     }
 
+    // Log filtering statistics
+    debugLogger.info("📊 FILTERING STATS for calendar \(calendarId):")
+    debugLogger.info("   - Total events from API: \(items.count)")
+    debugLogger.info("   - Final events after filtering: \(events.count)")
+    debugLogger.info("   - Filtered out: \(items.count - events.count)")
+
     let nextPageToken = json?["nextPageToken"] as? String
 
     return (events, nextPageToken)
   }
 
-  private func parseEvent(from item: [String: Any], calendarId: String) -> Event? {
+  // Internal for testing
+  func parseEvent(from item: [String: Any], calendarId: String) -> Event? {
     guard let id = item["id"] as? String,
       let summary = item["summary"] as? String,
       let start = item["start"] as? [String: Any],
       let end = item["end"] as? [String: Any]
     else {
+      return nil
+    }
+
+    // Filter out cancelled events early
+    let eventStatus = item["status"] as? String ?? "confirmed"
+    if eventStatus == "cancelled" {
+      debugLogger.info("🚫 FILTERED: Cancelled event - \(summary)")
       return nil
     }
 
@@ -307,6 +321,14 @@ class GoogleCalendarAPIService: ObservableObject {
       )
     }
 
+    // Filter out events where current user has declined
+    if let currentUserAttendee = attendees.first(where: { $0.isSelf }) {
+      if currentUserAttendee.status == .declined {
+        debugLogger.info("🚫 FILTERED: User declined event - \(summary)")
+        return nil
+      }
+    }
+
     // Parse attachments
     let attachmentsData = item["attachments"] as? [[String: Any]] ?? []
     let attachments = parseAttachments(from: attachmentsData)
@@ -341,7 +363,8 @@ class GoogleCalendarAPIService: ObservableObject {
     )
   }
 
-  private func parseAttendees(from attendeesData: [[String: Any]]) -> [Attendee] {
+  // Internal for testing
+  func parseAttendees(from attendeesData: [[String: Any]]) -> [Attendee] {
     return attendeesData.compactMap { attendeeData in
       guard let email = attendeeData["email"] as? String else {
         return nil
@@ -352,13 +375,15 @@ class GoogleCalendarAPIService: ObservableObject {
       let status = AttendeeStatus(rawValue: responseStatus ?? "needsAction")
       let isOptional = attendeeData["optional"] as? Bool ?? false
       let isOrganizer = attendeeData["organizer"] as? Bool ?? false
+      let isSelf = attendeeData["self"] as? Bool ?? false
 
       return Attendee(
         name: displayName,
         email: email,
         status: status,
         isOptional: isOptional,
-        isOrganizer: isOrganizer
+        isOrganizer: isOrganizer,
+        isSelf: isSelf
       )
     }
   }

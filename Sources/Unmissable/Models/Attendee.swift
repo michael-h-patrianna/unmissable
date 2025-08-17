@@ -7,13 +7,15 @@ struct Attendee: Identifiable, Codable, Equatable {
   let status: AttendeeStatus?
   let isOptional: Bool
   let isOrganizer: Bool
+  let isSelf: Bool
 
   init(
     name: String? = nil,
     email: String,
     status: AttendeeStatus? = nil,
     isOptional: Bool = false,
-    isOrganizer: Bool = false
+    isOrganizer: Bool = false,
+    isSelf: Bool
   ) {
     self.id = UUID()
     self.name = name
@@ -21,6 +23,7 @@ struct Attendee: Identifiable, Codable, Equatable {
     self.status = status
     self.isOptional = isOptional
     self.isOrganizer = isOrganizer
+    self.isSelf = isSelf
   }
 
   var displayName: String {

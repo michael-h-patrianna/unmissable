@@ -12,12 +12,13 @@ class AttendeeModelTests: XCTestCase {
       email: "john@example.com",
       status: .accepted,
       isOptional: false,
-      isOrganizer: true
+      isOrganizer: true,
+      isSelf: false
     )
 
     XCTAssertEqual(attendee.name, "John Doe")
     XCTAssertEqual(attendee.email, "john@example.com")
-    XCTAssertEqual(attendee.status, .accepted)
+    XCTAssertEqual(attendee.status, AttendeeStatus.accepted)
     XCTAssertFalse(attendee.isOptional)
     XCTAssertTrue(attendee.isOrganizer)
     XCTAssertEqual(attendee.displayName, "John Doe")
@@ -26,25 +27,44 @@ class AttendeeModelTests: XCTestCase {
   func testAttendeeWithoutName() {
     let attendee = Attendee(
       email: "noname@example.com",
-      status: .needsAction
+      status: .needsAction,
+      isSelf: false
     )
 
     XCTAssertNil(attendee.name)
     XCTAssertEqual(attendee.email, "noname@example.com")
-    XCTAssertEqual(attendee.status, .needsAction)
+    XCTAssertEqual(attendee.status, AttendeeStatus.needsAction)
     XCTAssertFalse(attendee.isOptional)
     XCTAssertFalse(attendee.isOrganizer)
     XCTAssertEqual(attendee.displayName, "noname@example.com", "Should use email when name is nil")
   }
 
   func testAttendeeDefaultValues() {
-    let attendee = Attendee(email: "default@example.com")
+    let attendee = Attendee(email: "default@example.com", isSelf: false)
 
     XCTAssertNil(attendee.name)
     XCTAssertEqual(attendee.email, "default@example.com")
     XCTAssertNil(attendee.status)
     XCTAssertFalse(attendee.isOptional)
     XCTAssertFalse(attendee.isOrganizer)
+    XCTAssertFalse(attendee.isSelf)
+  }
+
+  func testAttendeeSelfField() {
+    let currentUserAttendee = Attendee(
+      email: "current@example.com",
+      status: .accepted,
+      isSelf: true
+    )
+
+    let otherAttendee = Attendee(
+      email: "other@example.com",
+      status: .accepted,
+      isSelf: false
+    )
+
+    XCTAssertTrue(currentUserAttendee.isSelf)
+    XCTAssertFalse(otherAttendee.isSelf)
   }
 
   // MARK: - AttendeeStatus Tests
@@ -78,7 +98,8 @@ class AttendeeModelTests: XCTestCase {
       email: "test@example.com",
       status: .accepted,
       isOptional: true,
-      isOrganizer: false
+      isOrganizer: false,
+      isSelf: true
     )
 
     let encoder = JSONEncoder()
@@ -94,7 +115,8 @@ class AttendeeModelTests: XCTestCase {
       email: "test@example.com",
       status: .declined,
       isOptional: false,
-      isOrganizer: true
+      isOrganizer: true,
+      isSelf: true
     )
 
     let encoder = JSONEncoder()
@@ -108,14 +130,17 @@ class AttendeeModelTests: XCTestCase {
     XCTAssertEqual(decodedAttendee.status, attendee.status)
     XCTAssertEqual(decodedAttendee.isOptional, attendee.isOptional)
     XCTAssertEqual(decodedAttendee.isOrganizer, attendee.isOrganizer)
+    XCTAssertEqual(decodedAttendee.isSelf, attendee.isSelf)
     // Note: UUID ids will be different, but that's expected
   }
 
   func testAttendeeArrayCodable() throws {
     let attendees = [
-      Attendee(name: "User 1", email: "user1@example.com", status: .accepted),
-      Attendee(email: "user2@example.com", status: .tentative, isOptional: true),
-      Attendee(name: "Organizer", email: "org@example.com", status: .accepted, isOrganizer: true),
+      Attendee(name: "User 1", email: "user1@example.com", status: .accepted, isSelf: false),
+      Attendee(email: "user2@example.com", status: .tentative, isOptional: true, isSelf: false),
+      Attendee(
+        name: "Organizer", email: "org@example.com", status: .accepted, isOrganizer: true,
+        isSelf: false),
     ]
 
     let encoder = JSONEncoder()
@@ -132,13 +157,14 @@ class AttendeeModelTests: XCTestCase {
       XCTAssertEqual(original.status, decoded.status)
       XCTAssertEqual(original.isOptional, decoded.isOptional)
       XCTAssertEqual(original.isOrganizer, decoded.isOrganizer)
+      XCTAssertEqual(original.isSelf, decoded.isSelf)
     }
   }
 
   // MARK: - Edge Case Tests
 
   func testAttendeeWithEmptyEmail() {
-    let attendee = Attendee(name: "No Email", email: "")
+    let attendee = Attendee(name: "No Email", email: "", isSelf: false)
 
     XCTAssertEqual(attendee.email, "")
     XCTAssertEqual(attendee.displayName, "No Email", "Should use name when email is empty")
@@ -146,7 +172,7 @@ class AttendeeModelTests: XCTestCase {
 
   func testAttendeeWithVeryLongName() {
     let longName = String(repeating: "Very Long Name ", count: 100)
-    let attendee = Attendee(name: longName, email: "long@example.com")
+    let attendee = Attendee(name: longName, email: "long@example.com", isSelf: false)
 
     XCTAssertEqual(attendee.name, longName)
     XCTAssertEqual(attendee.displayName, longName)
@@ -156,7 +182,7 @@ class AttendeeModelTests: XCTestCase {
     let specialName = "José Müller-Schmidt 🎉"
     let specialEmail = "josé.müller+test@exämple-dömaın.cöm"
 
-    let attendee = Attendee(name: specialName, email: specialEmail)
+    let attendee = Attendee(name: specialName, email: specialEmail, isSelf: false)
 
     XCTAssertEqual(attendee.name, specialName)
     XCTAssertEqual(attendee.email, specialEmail)

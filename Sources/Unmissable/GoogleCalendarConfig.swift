@@ -92,10 +92,17 @@ struct GoogleCalendarConfig {
 
   // MARK: - Configuration Loading Helper
 
-  /// Loads Config.plist from project root directory
-  /// Optimized for VS Code + Swift Package Manager development
+  /// Loads Config.plist from app bundle Resources or project root directory
+  /// Handles both bundled app and development contexts
   private static func loadConfigFromProjectRoot() -> [String: Any]? {
-    // For VS Code + SPM development, try current working directory first
+    // First, try to load from app bundle Resources (for bundled app)
+    if let bundlePath = Bundle.main.path(forResource: "Config", ofType: "plist"),
+      let plist = NSDictionary(contentsOfFile: bundlePath) as? [String: Any]
+    {
+      return plist
+    }
+
+    // For VS Code + SPM development, try current working directory
     let currentDir = FileManager.default.currentDirectoryPath
     let configPath = NSString(string: currentDir).appendingPathComponent("Config.plist")
 
@@ -150,6 +157,8 @@ extension GoogleCalendarConfig {
   private static func configurationSource() -> String {
     if ProcessInfo.processInfo.environment["GOOGLE_OAUTH_CLIENT_ID"] != nil {
       return "Environment Variable"
+    } else if Bundle.main.path(forResource: "Config", ofType: "plist") != nil {
+      return "App Bundle Resources"
     } else if loadConfigFromProjectRoot() != nil {
       return "Config.plist (project root)"
     } else {

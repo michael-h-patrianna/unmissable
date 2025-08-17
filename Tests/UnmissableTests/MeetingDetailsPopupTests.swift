@@ -217,7 +217,7 @@ class MeetingDetailsPopupTests: XCTestCase {
       description: String(repeating: "Performance test description. ", count: 1000),
       attendees: (1...200).map { index in
         Attendee(
-          name: "Attendee \(index)", email: "attendee\(index)@example.com", status: .accepted)
+          name: "Attendee \(index)", email: "attendee\(index)@example.com", status: .accepted, isSelf: false)
       },
       calendarId: "performance"
     )
@@ -248,9 +248,9 @@ class MeetingDetailsPopupTests: XCTestCase {
       description: "This is a sample meeting for testing purposes.",
       location: "Conference Room A",
       attendees: [
-        Attendee(name: "John Doe", email: "john@example.com", status: .accepted, isOrganizer: true),
-        Attendee(name: "Jane Smith", email: "jane@example.com", status: .tentative),
-        Attendee(email: "contractor@external.com", status: .needsAction, isOptional: true),
+        Attendee(name: "John Doe", email: "john@example.com", status: .accepted, isOrganizer: true, isSelf: false),
+        Attendee(name: "Jane Smith", email: "jane@example.com", status: .tentative, isSelf: false),
+        Attendee(email: "contractor@external.com", status: .needsAction, isOptional: true, isSelf: false),
       ],
       calendarId: "primary",
       links: [URL(string: "https://meet.google.com/abc-defg-hij")!]

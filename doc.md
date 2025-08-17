@@ -1,8 +1,84 @@
 # Unmissable - LLM Coding Agent Documentation
 
-**CRITICAL: Read this entire document before making ANY code changes.**
+> **🎯 CRITICAL CONTEXT**: This is a macOS SwiftUI application for calendar meeting reminders with full-screen overlays. Swift Package Manager, Google Calendar integration, OAuth2 authentication, SQLite database, custom theming system.
 
-This document provides essential patterns, constraints, and architectural context for LLM agents working on the Unmissable macOS app. Following these patterns is mandatory to prevent deadlocks, memory leaks, and architectural violations.
+**🚨 READ FIRST**: [Mandatory Coding Patterns](#-mandatory-coding-patterns) | [Deadlock Prevention](#-critical-deadlock-prevention) | [Custom Theming](#-custom-theming-system) | [Troubleshooting](#-quick-troubleshooting-guide)
+
+---
+
+## 📋 Table of Contents
+
+### 🚀 Quick Start
+- [Mandatory Coding Patterns](#-mandatory-coding-patterns) - Required patterns to prevent deadlocks
+- [Project Overview](#project-overview) - High-level context and purpose
+- [Directory Structure](#directory-structure) - File organization and key components
+
+### 🏗️ Architecture & Design
+- [Architecture Overview](#️-architecture-overview) - Service dependencies and data flow
+- [Custom Theming System](#-custom-theming-system) - 100% custom UI theming
+- [Data Models](#data-models) - Core data structures
+- [Key Services](#key-services) - Main service layer components
+
+### 🔄 Critical Flows
+- [OAuth2 Flow](#oauth2-flow) - Google Calendar authentication
+- [Event Lifecycle](#-event-lifecycle--scheduling) - Event processing pipeline
+- [UI Architecture](#ui-architecture) - SwiftUI structure and patterns
+
+### ⚠️ Critical Knowledge
+- [Deadlock Prevention](#-critical-deadlock-prevention) - MANDATORY safety patterns
+- [Memory Management](#memory-management--testing-insights) - Testing and leak prevention
+- [Recent Critical Fixes](#recent-critical-fixes-august-2025) - Important bug fixes
+
+### 🛠️ Development
+- [Testing Strategy](#-testing-strategy) - Comprehensive testing approach
+- [Build & Development](#-build--development) - Setup and commands
+- [Troubleshooting](#-quick-troubleshooting-guide) - Debug guide
+
+---
+
+## 🎯 QUICK DECISION TREE FOR LLM AGENTS
+
+### Adding New UI Components
+```
+Are you adding UI interaction? → YES
+  ↓
+Does it involve buttons/clicks? → YES
+  ↓
+🚨 MANDATORY: Use background queue dispatch pattern
+✅ MANDATORY: Add deadlock prevention tests
+✅ MANDATORY: Use custom theming system
+```
+
+### Modifying Event Processing
+```
+Changing Event data? → YES
+  ↓
+Adding new fields? → YES
+  ↓
+🚨 MANDATORY: Update ALL Event constructors (especially TimezoneManager)
+✅ MANDATORY: Update Google Calendar API field specification
+✅ MANDATORY: Add database migration if needed
+```
+
+### Working with Windows/Overlays
+```
+Need to hide/close windows? → YES
+  ↓
+🚨 MANDATORY: Use window.orderOut(nil) NEVER window.close()
+✅ MANDATORY: Stop timers BEFORE window operations
+✅ MANDATORY: Clear state BEFORE window operations
+```
+
+### Adding New Services
+```
+Creating new service? → YES
+  ↓
+🚨 MANDATORY: Inject PreferencesManager via dependency injection
+✅ MANDATORY: Use @MainActor for UI-related services
+✅ MANDATORY: Implement ObservableObject pattern
+```
+
+---
 
 ## 🚨 MANDATORY CODING PATTERNS
 

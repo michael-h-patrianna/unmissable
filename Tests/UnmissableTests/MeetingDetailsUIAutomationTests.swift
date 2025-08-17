@@ -32,7 +32,7 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
         description: "This is a test meeting for UI automation.",
         location: "Test Room",
         attendees: [
-          Attendee(name: "Test User", email: "test@example.com", status: .accepted)
+          Attendee(name: "Test User", email: "test@example.com", status: .accepted, isSelf: false)
         ],
         calendarId: "test"
       ),
@@ -45,7 +45,7 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
           + String(repeating: "This is additional content. ", count: 50),
         attendees: (1...25).map { index in
           Attendee(
-            name: "Attendee \(index)", email: "attendee\(index)@example.com", status: .accepted)
+            name: "Attendee \(index)", email: "attendee\(index)@example.com", status: .accepted, isSelf: false)
         },
         calendarId: "test"
       ),
@@ -79,7 +79,7 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
       description: "This meeting tests the actual UI interaction flow.",
       location: "Integration Room",
       attendees: [
-        Attendee(name: "Integration Tester", email: "integration@example.com", status: .accepted)
+        Attendee(name: "Integration Tester", email: "integration@example.com", status: .accepted, isSelf: false)
       ],
       calendarId: "integration"
     )
@@ -122,7 +122,7 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
       organizer: "visibility@example.com",
       description: "Testing popup visibility in UI",
       attendees: [
-        Attendee(name: "Visibility Tester", email: "visibility@example.com", status: .accepted)
+        Attendee(name: "Visibility Tester", email: "visibility@example.com", status: .accepted, isSelf: false)
       ],
       calendarId: "visibility"
     )
@@ -252,8 +252,8 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
         startDate: Date(),
         endDate: Date().addingTimeInterval(1800),
         attendees: [
-          Attendee(name: "John Doe", email: "john@example.com", status: .accepted),
-          Attendee(email: "jane@example.com", status: .tentative),
+          Attendee(name: "John Doe", email: "john@example.com", status: .accepted, isSelf: false),
+          Attendee(email: "jane@example.com", status: .tentative, isSelf: false),
         ],
         calendarId: "test"
       ),
@@ -269,10 +269,10 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
         location: "Conference Room A",
         attendees: [
           Attendee(
-            name: "Organizer", email: "organizer@example.com", status: .accepted, isOrganizer: true),
-          Attendee(name: "Required", email: "required@example.com", status: .accepted),
+            name: "Organizer", email: "organizer@example.com", status: .accepted, isOrganizer: true, isSelf: false),
+          Attendee(name: "Required", email: "required@example.com", status: .accepted, isSelf: false),
           Attendee(
-            name: "Optional", email: "optional@example.com", status: .tentative, isOptional: true),
+            name: "Optional", email: "optional@example.com", status: .tentative, isOptional: true, isSelf: false),
         ],
         calendarId: "test",
         links: [URL(string: "https://meet.google.com/test")!]
@@ -301,7 +301,7 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
       description: String(repeating: "Stress test content. ", count: 100),
       attendees: (1...50).map { index in
         Attendee(
-          name: "Stress Attendee \(index)", email: "stress\(index)@example.com", status: .accepted)
+          name: "Stress Attendee \(index)", email: "stress\(index)@example.com", status: .accepted, isSelf: false)
       },
       calendarId: "stress"
     )
@@ -364,8 +364,8 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
       description: "Testing accessibility compliance for screen readers and keyboard navigation.",
       location: "Accessible Room",
       attendees: [
-        Attendee(name: "Screen Reader User", email: "sr@example.com", status: .accepted),
-        Attendee(name: "Keyboard User", email: "kb@example.com", status: .tentative),
+        Attendee(name: "Screen Reader User", email: "sr@example.com", status: .accepted, isSelf: false),
+        Attendee(name: "Keyboard User", email: "kb@example.com", status: .tentative, isSelf: false),
       ],
       calendarId: "a11y"
     )
@@ -484,7 +484,7 @@ class MeetingDetailsUIAutomationTests: XCTestCase {
       endDate: Date().addingTimeInterval(1800),
       description: "Testing popup behavior in production-like conditions.",
       attendees: [
-        Attendee(name: "Production User", email: "prod@example.com", status: .accepted)
+        Attendee(name: "Production User", email: "prod@example.com", status: .accepted, isSelf: false)
       ],
       calendarId: "production"
     )

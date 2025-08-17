@@ -411,9 +411,12 @@ struct MeetingDetailsView: View {
       "Daily standup to discuss progress and blockers. Please come prepared with your updates.",
     location: "Conference Room A",
     attendees: [
-      Attendee(name: "John Doe", email: "john@company.com", status: .accepted, isOrganizer: true),
-      Attendee(name: "Jane Smith", email: "jane@company.com", status: .tentative),
-      Attendee(email: "contractor@external.com", status: .needsAction, isOptional: true),
+      Attendee(
+        name: "John Doe", email: "john@company.com", status: .accepted, isOrganizer: true,
+        isSelf: false),
+      Attendee(name: "Jane Smith", email: "jane@company.com", status: .tentative, isSelf: false),
+      Attendee(
+        email: "contractor@external.com", status: .needsAction, isOptional: true, isSelf: false),
     ],
     calendarId: "primary",
     links: [URL(string: "https://meet.google.com/abc-defg-hij")!]
