@@ -72,6 +72,18 @@ struct Event: Identifiable, Codable, Equatable {
     !links.isEmpty
   }
 
+  var shouldShowJoinButton: Bool {
+    guard isOnlineMeeting else { return false }
+
+    let now = Date()
+    let tenMinutesBeforeStart = startDate.addingTimeInterval(-600)  // 10 minutes = 600 seconds
+
+    // Show join button if:
+    // 1. Meeting starts within 10 minutes (now >= tenMinutesBeforeStart AND now < startDate)
+    // 2. Meeting has already started (now >= startDate AND now < endDate)
+    return now >= tenMinutesBeforeStart && now < endDate
+  }
+
   var localStartDate: Date {
     let timeZone = TimeZone(identifier: timezone) ?? TimeZone.current
     let offset = timeZone.secondsFromGMT(for: startDate)

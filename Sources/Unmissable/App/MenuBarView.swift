@@ -16,7 +16,7 @@ struct MenuBarView: View {
       ? filteredTodayEvents
       : filteredEventsForDisplay
 
-    return groupEventsByDate(events)
+    return groupEventsByDate(events, includingStarted: true)
   }
 
   private var filteredTodayEvents: [Event] {
@@ -49,12 +49,21 @@ struct MenuBarView: View {
     return nil
   }
 
-  private func groupEventsByDate(_ events: [Event]) -> [EventGroup] {
+  private func groupEventsByDate(_ events: [Event], includingStarted: Bool = false) -> [EventGroup]
+  {
     let calendar = Calendar.current
     let today = Date()
     let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
 
     var groups: [EventGroup] = []
+
+    // Add started meetings group if including started events
+    if includingStarted {
+      let startedMeetings = appState.startedEvents
+      if !startedMeetings.isEmpty {
+        groups.append(EventGroup(title: "Started", events: startedMeetings))
+      }
+    }
 
     // Group events by date
     let todayEvents = events.filter { calendar.isDate($0.startDate, inSameDayAs: today) }
@@ -362,7 +371,7 @@ struct CustomEventRow: View {
               .font(.system(size: 14, weight: .medium))
           }
 
-          if event.isOnlineMeeting, let primaryLink = event.primaryLink {
+          if event.shouldShowJoinButton, let primaryLink = event.primaryLink {
             CustomButton("Join", icon: "video.fill", style: .secondary) {
               NSWorkspace.shared.open(primaryLink)
             }

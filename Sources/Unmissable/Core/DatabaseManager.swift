@@ -262,6 +262,31 @@ class DatabaseManager: ObservableObject {
     return events
   }
 
+  func fetchStartedMeetings(limit: Int = 10) async throws -> [Event] {
+    guard let dbQueue = dbQueue else {
+      throw DatabaseError.notInitialized
+    }
+
+    let now = Date()
+    let events = try await dbQueue.read { db in
+      try Event
+        .filter(Event.Columns.startDate <= now && Event.Columns.endDate > now)
+        .order(Event.Columns.startDate.desc)  // Most recently started first
+        .limit(limit)
+        .fetchAll(db)
+    }
+
+    debugLogger.info("📤 FETCHED \(events.count) STARTED MEETINGS FROM DATABASE")
+    if let firstEvent = events.first {
+      debugLogger.info("   - First started meeting: \(firstEvent.title)")
+      debugLogger.info(
+        "   - Started at: \(firstEvent.startDate), ends at: \(firstEvent.endDate)"
+      )
+    }
+
+    return events
+  }
+
   func deleteEventsForCalendar(_ calendarId: String) async throws {
     guard let dbQueue = dbQueue else {
       throw DatabaseError.notInitialized

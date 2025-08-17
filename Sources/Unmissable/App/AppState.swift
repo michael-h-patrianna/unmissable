@@ -12,6 +12,7 @@ class AppState: ObservableObject {
   @Published var syncStatus: SyncStatus = .idle
   @Published var lastSyncTime: Date?
   @Published var upcomingEvents: [Event] = []
+  @Published var startedEvents: [Event] = []
   @Published var activeOverlay: Event?
   @Published var userEmail: String?
   @Published var calendars: [CalendarInfo] = []
@@ -78,10 +79,23 @@ class AppState: ObservableObject {
       .assign(to: \.upcomingEvents, on: self)
       .store(in: &cancellables)
 
+    // Observe started events
+    calendarService.$startedEvents
+      .assign(to: \.startedEvents, on: self)
+      .store(in: &cancellables)
+
     // Update menu bar preview when events change
     calendarService.$events
       .sink { [weak self] events in
         self?.menuBarPreviewManager.updateEvents(events)
+      }
+      .store(in: &cancellables)
+
+    // Update menu bar preview when started events change (for proper next meeting calculation)
+    calendarService.$startedEvents
+      .sink { [weak self] _ in
+        // Refresh with all upcoming events to recalculate next meeting
+        self?.menuBarPreviewManager.updateEvents(self?.upcomingEvents ?? [])
       }
       .store(in: &cancellables)
 

@@ -9,6 +9,7 @@ class CalendarService: ObservableObject {
   @Published var isConnected = false
   @Published var syncStatus: SyncStatus = .idle
   @Published var events: [Event] = []
+  @Published var startedEvents: [Event] = []
   @Published var calendars: [CalendarInfo] = []
   @Published var lastSyncTime: Date?
   @Published var nextSyncTime: Date?
@@ -20,6 +21,7 @@ class CalendarService: ObservableObject {
   private let timezoneManager: TimezoneManager
   private let preferencesManager: PreferencesManager
   private var cancellables = Set<AnyCancellable>()
+  private var uiRefreshTimer: Timer?
 
   // Callback to notify when events need to be rescheduled after sync
   var onEventsUpdated: (() async -> Void)?
@@ -36,6 +38,7 @@ class CalendarService: ObservableObject {
 
     setupBindings()
     setupSyncCallback()
+    startUIRefreshTimer()
   }
 
   private func setupBindings() {
@@ -174,8 +177,13 @@ class CalendarService: ObservableObject {
       // Load upcoming events from database with timezone conversion
       let cachedEvents = try await databaseManager.fetchUpcomingEvents(limit: 50)
 
+      // Load started meetings from database with timezone conversion
+      let cachedStartedEvents = try await databaseManager.fetchStartedMeetings(limit: 20)
+
       // DEBUG: Log what events we're loading for the UI
-      print("🔄 CalendarService: Loading \(cachedEvents.count) events for UI")
+      print(
+        "🔄 CalendarService: Loading \(cachedEvents.count) upcoming + \(cachedStartedEvents.count) started events for UI"
+      )
       if let firstEvent = cachedEvents.first {
         print("🔄 CalendarService: First cached event - \(firstEvent.title)")
         print(
@@ -183,9 +191,13 @@ class CalendarService: ObservableObject {
         )
         print("🔄 CalendarService: Attendees in cached: \(firstEvent.attendees.count) attendees")
       }
+      if let firstStartedEvent = cachedStartedEvents.first {
+        print("🔄 CalendarService: First started event - \(firstStartedEvent.title)")
+      }
       fflush(stdout)
 
       events = cachedEvents.map { timezoneManager.localizedEvent($0) }
+      startedEvents = cachedStartedEvents.map { timezoneManager.localizedEvent($0) }
 
       // DEBUG: Log what events we're setting for the UI after timezone conversion
       if let firstUIEvent = events.first {
@@ -195,10 +207,15 @@ class CalendarService: ObservableObject {
         )
         print("🔄 CalendarService: Attendees in UI: \(firstUIEvent.attendees.count) attendees")
       }
+      if let firstStartedUIEvent = startedEvents.first {
+        print(
+          "🔄 CalendarService: First started UI event after timezone - \(firstStartedUIEvent.title)")
+      }
       fflush(stdout)
 
       logger.info(
-        "Loaded \(self.calendars.count) calendars and \(self.events.count) events from cache")
+        "Loaded \(self.calendars.count) calendars, \(self.events.count) upcoming events, and \(self.startedEvents.count) started meetings from cache"
+      )
     } catch {
       logger.error("Failed to load cached data: \(error.localizedDescription)")
     }
@@ -237,5 +254,30 @@ class CalendarService: ObservableObject {
 
   var syncManagerPublic: SyncManager {
     syncManager
+  }
+
+  // MARK: - UI Refresh Timer
+
+  private func startUIRefreshTimer() {
+    // Start a timer that refreshes UI events every 30 seconds
+    // This ensures real-time updates for time-dependent UI elements like join buttons
+    uiRefreshTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+      Task { @MainActor in
+        await self?.refreshUIEvents()
+      }
+    }
+    logger.info("✅ UI refresh timer started (30 second interval)")
+  }
+
+  private func stopUIRefreshTimer() {
+    uiRefreshTimer?.invalidate()
+    uiRefreshTimer = nil
+    logger.info("⏹️ UI refresh timer stopped")
+  }
+
+  private func refreshUIEvents() async {
+    // Refresh events from database to update time-dependent UI elements
+    // without triggering a full calendar sync
+    await loadCachedData()
   }
 }
