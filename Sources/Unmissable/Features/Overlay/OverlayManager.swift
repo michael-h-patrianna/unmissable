@@ -14,6 +14,9 @@ class OverlayManager: ObservableObject, OverlayManaging {
 
   private var overlayWindows: [NSWindow] = []
   private var countdownTimer: Timer?
+  private var countdownTask: Task<Void, Never>?
+  private var snoozeTask: Task<Void, Never>?
+  private var scheduleTask: Task<Void, Never>?
   private var scheduledTimers: [Timer] = []  // Track all scheduled timers for cleanup
   private let preferencesManager: PreferencesManager
   private let soundManager: SoundManager
@@ -159,17 +162,23 @@ class OverlayManager: ObservableObject, OverlayManaging {
       scheduler.scheduleSnooze(for: event, minutes: minutes)
       logger.info("✅ Snooze scheduled through EventScheduler")
     } else {
-      // Fallback to old method if EventScheduler not available
-      logger.warning("⚠️ EventScheduler not available, using fallback timer")
-      let snoozeTimer = Timer.scheduledTimer(
-        withTimeInterval: TimeInterval(minutes * 60), repeats: false
-      ) {
-        [weak self] _ in
-        Task { @MainActor in
-          self?.showOverlay(for: event, minutesBeforeMeeting: 2, fromSnooze: true)
+      // Fallback to Task-based method if EventScheduler not available
+      logger.warning("⚠️ EventScheduler not available, using fallback Task")
+      
+      snoozeTask = Task { @MainActor in
+        do {
+          let snoozeSeconds = TimeInterval(minutes * 60)
+          logger.info("⏰ SNOOZE: Starting \(snoozeSeconds)s delay")
+          try await Task.sleep(for: .seconds(snoozeSeconds))
+          
+          if !Task.isCancelled {
+            logger.info("⏰ SNOOZE: Delay complete, showing overlay")
+            showOverlay(for: event, minutesBeforeMeeting: 2, fromSnooze: true)
+          }
+        } catch {
+          logger.info("⏰ SNOOZE: Task cancelled")
         }
       }
-      scheduledTimers.append(snoozeTimer)  // Track the timer for cleanup
     }
   }
 
@@ -185,24 +194,31 @@ class OverlayManager: ObservableObject, OverlayManaging {
     )
 
     if timeUntilShow > 0 {
-      logger.info("✅ SCHEDULING: Overlay for \(event.title) in \(timeUntilShow) seconds")
+      logger.info("✅ SCHEDULING: Task-based overlay for \(event.title) in \(timeUntilShow) seconds")
 
-      // CRITICAL FIX: Use MainActor to ensure proper thread safety
-      let scheduleTimer = Timer.scheduledTimer(withTimeInterval: timeUntilShow, repeats: false) {
-        [weak self] timer in
-        guard let self = self else { return }
-
-        self.logger.info("🔥 TIMER FIRED: Attempting to show overlay for \(event.title)")
-
-        // CRITICAL FIX: Always use async dispatch to avoid deadlocks
-        Task { @MainActor in
-          self.logger.info("📱 MAIN QUEUE: Calling showOverlay for \(event.title)")
-          self.showOverlay(
-            for: event, minutesBeforeMeeting: minutesBeforeMeeting, fromSnooze: false)
+      // Cancel any existing schedule task before creating new one
+      scheduleTask?.cancel()
+      
+      // CRITICAL FIX: Use Task-based scheduling to ensure proper thread safety
+      scheduleTask = Task { @MainActor in
+        do {
+          logger.info("⏰ SCHEDULE: Starting \(timeUntilShow)s delay for \(event.title)")
+          try await Task.sleep(for: .seconds(timeUntilShow))
+          
+          if !Task.isCancelled {
+            logger.info("🔥 TASK FIRED: Attempting to show overlay for \(event.title)")
+            logger.info("📱 MAIN QUEUE: Calling showOverlay for \(event.title)")
+            showOverlay(
+              for: event, minutesBeforeMeeting: minutesBeforeMeeting, fromSnooze: false)
+          } else {
+            logger.info("⏰ SCHEDULE: Task was cancelled for \(event.title)")
+          }
+        } catch {
+          logger.info("⏰ SCHEDULE: Task cancelled/interrupted for \(event.title)")
         }
       }
-      scheduledTimers.append(scheduleTimer)  // Track the timer for cleanup
-      logger.info("📝 TIMER SCHEDULED: Total scheduled timers: \(self.scheduledTimers.count)")
+      
+      logger.info("📝 TASK SCHEDULED: Schedule task created for \(event.title)")
     } else {
       logger.warning(
         "⚠️ SKIP: Event \(event.title) starts too soon to schedule overlay (timeUntilShow: \(timeUntilShow))"
@@ -287,20 +303,39 @@ class OverlayManager: ObservableObject, OverlayManaging {
   // MARK: - Countdown Timer
 
   private func startCountdownTimer(for event: Event) {
+    logger.debug("⏰ COUNTDOWN: Starting Task-based countdown timer for \(event.title)")
     stopCountdownTimer()
 
-    countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-      guard let self = self else { return }
-      Task { @MainActor in
-        self.updateCountdown(for: event)
+    countdownTask = Task { @MainActor in
+      while !Task.isCancelled && isOverlayVisible && activeEvent?.id == event.id {
+        do {
+          logger.debug("⏰ COUNTDOWN: Task iteration for \(event.title)")
+          updateCountdown(for: event)
+          try await Task.sleep(for: .seconds(1))
+        } catch {
+          // Task was cancelled
+          logger.info("⏰ COUNTDOWN: Task cancelled for \(event.title)")
+          break
+        }
       }
+      logger.info("⏰ COUNTDOWN: Task completed for \(event.title)")
     }
   }
 
   private func stopCountdownTimer() {
-    countdownTimer?.invalidate()
-    countdownTimer = nil
-    logger.debug("⏹️ TIMER: Countdown timer stopped and deallocated")
+    // Cancel Task-based countdown
+    if let task = countdownTask {
+      task.cancel()
+      countdownTask = nil
+      logger.debug("⏹️ TASK: Countdown task cancelled and deallocated")
+    }
+    
+    // Also clean up any legacy Timer (for transition period)
+    if let timer = countdownTimer {
+      timer.invalidate()
+      countdownTimer = nil
+      logger.debug("⏹️ TIMER: Legacy countdown timer stopped and deallocated")
+    }
   }
 
   private func invalidateAllScheduledTimers() {
@@ -309,6 +344,20 @@ class OverlayManager: ObservableObject, OverlayManaging {
       timer.invalidate()
     }
     scheduledTimers.removeAll()
+    
+    // Cancel snooze task
+    if let snoozeTask = snoozeTask {
+      snoozeTask.cancel()
+      self.snoozeTask = nil
+      logger.debug("🧹 CLEANUP: Cancelled snooze task")
+    }
+    
+    // Cancel schedule task
+    if let scheduleTask = scheduleTask {
+      scheduleTask.cancel()
+      self.scheduleTask = nil
+      logger.debug("🧹 CLEANUP: Cancelled schedule task")
+    }
   }
 
   private func updateCountdown(for event: Event) {
