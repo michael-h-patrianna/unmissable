@@ -4,7 +4,8 @@ import OSLog
 @MainActor
 class GoogleCalendarAPIService: ObservableObject {
   private let logger = Logger(subsystem: "com.unmissable.app", category: "GoogleCalendarAPIService")
-  private let debugLogger = DebugLogger(subsystem: "com.unmissable.app", category: "GoogleCalendarAPIService")
+  private let debugLogger = DebugLogger(
+    subsystem: "com.unmissable.app", category: "GoogleCalendarAPIService")
   private let oauth2Service: OAuth2Service
 
   @Published var calendars: [CalendarInfo] = []
@@ -76,7 +77,7 @@ class GoogleCalendarAPIService: ObservableObject {
 
   func fetchEvents(for calendarIds: [String], from startDate: Date, to endDate: Date) async throws {
     debugLogger.info("🌐 API: fetchEvents called for \(calendarIds.count) calendars")
-    
+
     logger.info("Fetching events for \(calendarIds.count) calendars")
     isLoading = true
     lastError = nil
@@ -139,11 +140,11 @@ class GoogleCalendarAPIService: ObservableObject {
       URLQueryItem(name: "maxResults", value: "250"),
       // CRITICAL: maxAttendees required to get attendee list (defaults to truncation without this)
       URLQueryItem(name: "maxAttendees", value: "100"),
-      // Request comprehensive event fields including description and attendees
+      // Request comprehensive event fields including description, attendees, and attachments
       URLQueryItem(
         name: "fields",
         value:
-          "items(id,summary,start,end,organizer,description,location,attendees,hangoutLink,conferenceData),nextPageToken"
+          "items(id,summary,start,end,organizer,description,location,attendees,attachments,hangoutLink,conferenceData),nextPageToken"
       ),
     ]
 
@@ -219,10 +220,11 @@ class GoogleCalendarAPIService: ObservableObject {
       debugLogger.info("🔍 RAW API RESPONSE for first event:")
       debugLogger.info("   - ID: \(firstEvent["id"] as? String ?? "missing")")
       debugLogger.info("   - Summary: \(firstEvent["summary"] as? String ?? "missing")")
-      debugLogger.info("   - Description in API: \(firstEvent["description"] != nil ? "YES" : "NO")")
+      debugLogger.info(
+        "   - Description in API: \(firstEvent["description"] != nil ? "YES" : "NO")")
       debugLogger.info("   - Location in API: \(firstEvent["location"] != nil ? "YES" : "NO")")
       debugLogger.info("   - Attendees in API: \(firstEvent["attendees"] != nil ? "YES" : "NO")")
-      
+
       if let attendees = firstEvent["attendees"] as? [[String: Any]] {
         debugLogger.info("   - Attendees count: \(attendees.count)")
       }
@@ -300,7 +302,18 @@ class GoogleCalendarAPIService: ObservableObject {
     if !attendees.isEmpty {
       debugLogger.info("✅ ATTENDEES found for event: \(summary) - count: \(attendees.count)")
     } else {
-      debugLogger.info("❌ NO ATTENDEES for event: \(summary) - raw data: \(attendeesData.isEmpty ? "empty" : "present but unparseable")")
+      debugLogger.info(
+        "❌ NO ATTENDEES for event: \(summary) - raw data: \(attendeesData.isEmpty ? "empty" : "present but unparseable")"
+      )
+    }
+
+    // Parse attachments
+    let attachmentsData = item["attachments"] as? [[String: Any]] ?? []
+    let attachments = parseAttachments(from: attachmentsData)
+    if !attachments.isEmpty {
+      debugLogger.info("✅ ATTACHMENTS found for event: \(summary) - count: \(attachments.count)")
+    } else {
+      debugLogger.info("❌ NO ATTACHMENTS for event: \(summary)")
     }
 
     // Parse timezone
@@ -319,6 +332,7 @@ class GoogleCalendarAPIService: ObservableObject {
       description: description,
       location: location,
       attendees: attendees,
+      attachments: attachments,
       isAllDay: isAllDay,
       calendarId: calendarId,
       timezone: timezone,
@@ -346,6 +360,12 @@ class GoogleCalendarAPIService: ObservableObject {
         isOptional: isOptional,
         isOrganizer: isOrganizer
       )
+    }
+  }
+
+  private func parseAttachments(from attachmentsData: [[String: Any]]) -> [EventAttachment] {
+    return attachmentsData.compactMap { attachmentData in
+      return EventAttachment.from(googleCalendarData: attachmentData)
     }
   }
 

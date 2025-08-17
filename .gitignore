@@ -34,7 +34,7 @@ Carthage/Build/
 # Temporary files
 *.tmp
 *~.nib
-
+app_logs.txt
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -47,6 +47,8 @@ Thumbs.db
 # IDE files
 .vscode/
 .idea/
+.chatmodes/
+.specstory/
 
 # Local environment files
 .env

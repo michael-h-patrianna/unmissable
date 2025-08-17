@@ -55,8 +55,9 @@ class TimezoneManager {
       endDate: localEndDate,
       organizer: event.organizer,
       description: event.description,  // ✅ FIX: Copy description
-      location: event.location,        // ✅ FIX: Copy location
-      attendees: event.attendees,      // ✅ FIX: Copy attendees
+      location: event.location,  // ✅ FIX: Copy location
+      attendees: event.attendees,  // ✅ FIX: Copy attendees
+      attachments: event.attachments,  // ✅ NEW: Copy attachments
       isAllDay: event.isAllDay,
       calendarId: event.calendarId,
       timezone: TimeZone.current.identifier,  // Convert to local timezone

@@ -4,9 +4,10 @@ import OSLog
 
 class DatabaseManager: ObservableObject {
   private let logger = Logger(subsystem: "com.unmissable.app", category: "DatabaseManager")
-  private let debugLogger = DebugLogger(subsystem: "com.unmissable.app", category: "DatabaseManager")
+  private let debugLogger = DebugLogger(
+    subsystem: "com.unmissable.app", category: "DatabaseManager")
   private var dbQueue: DatabaseQueue?
-  private let currentSchemaVersion = 2
+  private let currentSchemaVersion = 3
 
   static let shared = DatabaseManager()
 
@@ -112,6 +113,12 @@ class DatabaseManager: ObservableObject {
         t.add(column: "attendees", .text).notNull().defaults(to: "[]")
       }
       logger.info("Migrated to version 2: Added description, location, and attendees columns")
+    case 3:
+      // Add attachments column to events table for Google Drive file attachments
+      try db.alter(table: Event.databaseTableName) { t in
+        t.add(column: "attachments", .text).notNull().defaults(to: "[]")
+      }
+      logger.info("Migrated to version 3: Added attachments column")
     default:
       throw DatabaseError.migrationFailed("Unknown migration version: \(version)")
     }
@@ -128,6 +135,7 @@ class DatabaseManager: ObservableObject {
       t.column("description", .text)
       t.column("location", .text)
       t.column("attendees", .text).notNull().defaults(to: "[]")
+      t.column("attachments", .text).notNull().defaults(to: "[]")
       t.column("isAllDay", .boolean).notNull().defaults(to: false)
       t.column("calendarId", .text).notNull()
       t.column("timezone", .text).notNull()
@@ -196,7 +204,9 @@ class DatabaseManager: ObservableObject {
     if let firstEvent = events.first {
       debugLogger.info("💾 SAVING EVENT TO DATABASE:")
       debugLogger.info("   - Title: \(firstEvent.title)")
-      debugLogger.info("   - Description being saved: \(firstEvent.description != nil ? "YES (\(firstEvent.description!.count) chars)" : "NO")")
+      debugLogger.info(
+        "   - Description being saved: \(firstEvent.description != nil ? "YES (\(firstEvent.description!.count) chars)" : "NO")"
+      )
       debugLogger.info("   - Location being saved: \(firstEvent.location != nil ? "YES" : "NO")")
       debugLogger.info("   - Attendees being saved: \(firstEvent.attendees.count) attendees")
     }
@@ -237,16 +247,18 @@ class DatabaseManager: ObservableObject {
         .limit(limit)
         .fetchAll(db)
     }
-    
+
     // Log first fetched event to verify data retrieval
     if let firstEvent = events.first {
       debugLogger.info("📤 FETCHED EVENT FROM DATABASE:")
       debugLogger.info("   - Title: \(firstEvent.title)")
-      debugLogger.info("   - Description fetched: \(firstEvent.description != nil ? "YES (\(firstEvent.description!.count) chars)" : "NO")")
+      debugLogger.info(
+        "   - Description fetched: \(firstEvent.description != nil ? "YES (\(firstEvent.description!.count) chars)" : "NO")"
+      )
       debugLogger.info("   - Location fetched: \(firstEvent.location != nil ? "YES" : "NO")")
       debugLogger.info("   - Attendees fetched: \(firstEvent.attendees.count) attendees")
     }
-    
+
     return events
   }
 

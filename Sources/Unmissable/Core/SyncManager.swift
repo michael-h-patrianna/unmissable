@@ -188,13 +188,14 @@ class SyncManager: ObservableObject {
 
       let fetchedEvents = apiService.events
       debugLogger.info("🔄 SYNC: Got \(fetchedEvents.count) events from API")
-      
+
       if let firstEvent = fetchedEvents.first {
         debugLogger.info("🔄 SYNC: First event - \(firstEvent.title)")
-        debugLogger.info("🔄 SYNC: Description in sync: \(firstEvent.description != nil ? "YES" : "NO")")
+        debugLogger.info(
+          "🔄 SYNC: Description in sync: \(firstEvent.description != nil ? "YES" : "NO")")
         debugLogger.info("🔄 SYNC: Attendees in sync: \(firstEvent.attendees.count) attendees")
       }
-      
+
       logger.info("📥 API returned \(fetchedEvents.count) events")
 
       // Log details about fetched events for debugging

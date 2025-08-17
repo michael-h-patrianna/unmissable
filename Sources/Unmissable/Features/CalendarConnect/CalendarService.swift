@@ -173,22 +173,26 @@ class CalendarService: ObservableObject {
 
       // Load upcoming events from database with timezone conversion
       let cachedEvents = try await databaseManager.fetchUpcomingEvents(limit: 50)
-      
+
       // DEBUG: Log what events we're loading for the UI
       print("🔄 CalendarService: Loading \(cachedEvents.count) events for UI")
       if let firstEvent = cachedEvents.first {
         print("🔄 CalendarService: First cached event - \(firstEvent.title)")
-        print("🔄 CalendarService: Description in cached: \(firstEvent.description != nil ? "YES (\(firstEvent.description!.count) chars)" : "NO")")
+        print(
+          "🔄 CalendarService: Description in cached: \(firstEvent.description != nil ? "YES (\(firstEvent.description!.count) chars)" : "NO")"
+        )
         print("🔄 CalendarService: Attendees in cached: \(firstEvent.attendees.count) attendees")
       }
       fflush(stdout)
-      
+
       events = cachedEvents.map { timezoneManager.localizedEvent($0) }
-      
+
       // DEBUG: Log what events we're setting for the UI after timezone conversion
       if let firstUIEvent = events.first {
         print("🔄 CalendarService: First UI event after timezone - \(firstUIEvent.title)")
-        print("🔄 CalendarService: Description in UI: \(firstUIEvent.description != nil ? "YES (\(firstUIEvent.description!.count) chars)" : "NO")")
+        print(
+          "🔄 CalendarService: Description in UI: \(firstUIEvent.description != nil ? "YES (\(firstUIEvent.description!.count) chars)" : "NO")"
+        )
         print("🔄 CalendarService: Attendees in UI: \(firstUIEvent.attendees.count) attendees")
       }
       fflush(stdout)

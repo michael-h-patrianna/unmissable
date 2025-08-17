@@ -13,6 +13,7 @@ extension Event: FetchableRecord, PersistableRecord {
     static let description = Column("description")
     static let location = Column("location")
     static let attendees = Column("attendees")
+    static let attachments = Column("attachments")
     static let isAllDay = Column("isAllDay")
     static let calendarId = Column("calendarId")
     static let timezone = Column("timezone")
@@ -41,6 +42,16 @@ extension Event: FetchableRecord, PersistableRecord {
       attendees = decodedAttendees
     } else {
       attendees = []
+    }
+
+    // Decode attachments from JSON string
+    let attachmentsData = row[Columns.attachments] as? String ?? "[]"
+    if let data = attachmentsData.data(using: .utf8),
+      let decodedAttachments = try? JSONDecoder().decode([EventAttachment].self, from: data)
+    {
+      attachments = decodedAttachments
+    } else {
+      attachments = []
     }
 
     isAllDay = row[Columns.isAllDay]
@@ -86,6 +97,15 @@ extension Event: FetchableRecord, PersistableRecord {
       container[Columns.attendees] = jsonString
     } else {
       container[Columns.attendees] = "[]"
+    }
+
+    // Encode attachments as JSON string
+    if let data = try? JSONEncoder().encode(attachments),
+      let jsonString = String(data: data, encoding: .utf8)
+    {
+      container[Columns.attachments] = jsonString
+    } else {
+      container[Columns.attachments] = "[]"
     }
 
     container[Columns.isAllDay] = isAllDay

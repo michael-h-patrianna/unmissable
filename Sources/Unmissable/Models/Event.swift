@@ -9,6 +9,7 @@ struct Event: Identifiable, Codable, Equatable {
   let description: String?
   let location: String?
   let attendees: [Attendee]
+  let attachments: [EventAttachment]
   let isAllDay: Bool
   let calendarId: String
   let timezone: String
@@ -28,6 +29,7 @@ struct Event: Identifiable, Codable, Equatable {
     description: String? = nil,
     location: String? = nil,
     attendees: [Attendee] = [],
+    attachments: [EventAttachment] = [],
     isAllDay: Bool = false,
     calendarId: String,
     timezone: String = TimeZone.current.identifier,
@@ -46,6 +48,7 @@ struct Event: Identifiable, Codable, Equatable {
     self.description = description
     self.location = location
     self.attendees = attendees
+    self.attachments = attachments
     self.isAllDay = isAllDay
     self.calendarId = calendarId
     self.timezone = timezone
@@ -91,6 +94,7 @@ struct Event: Identifiable, Codable, Equatable {
     description: String? = nil,
     location: String? = nil,
     attendees: [Attendee] = [],
+    attachments: [EventAttachment] = [],
     isAllDay: Bool = false,
     calendarId: String,
     timezone: String = TimeZone.current.identifier,
@@ -122,6 +126,7 @@ struct Event: Identifiable, Codable, Equatable {
       description: description,
       location: location,
       attendees: attendees,
+      attachments: attachments,
       isAllDay: isAllDay,
       calendarId: calendarId,
       timezone: timezone,

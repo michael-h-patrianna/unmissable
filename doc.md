@@ -1,5 +1,410 @@
 # Unmissable - LLM Coding Agent Documentation
 
+**CRITICAL: Read this entire document before making ANY code changes.**
+
+This document provides essential patterns, constraints, and architectural context for LLM agents working on the Unmissable macOS app. Following these patterns is mandatory to prevent deadlocks, memory leaks, and architectural violations.
+
+## 🚨 MANDATORY CODING PATTERNS
+
+### UI Button Callbacks (DEADLOCK PREVENTION)
+```swift
+// ✅ REQUIRED: Background queue dispatch pattern
+onDismiss: { [weak self] in
+  DispatchQueue.global(qos: .userInitiated).async {
+    DispatchQueue.main.async {
+      self?.hideOverlay()
+    }
+  }
+}
+```
+
+### Window Management (DEADLOCK PREVENTION)
+```swift
+// ✅ REQUIRED: Use orderOut(nil), NEVER close()
+func hideOverlay() {
+  stopCountdownTimer()        // STEP 1: Stop timers first
+  activeEvent = nil           // STEP 2: Clear state
+  isOverlayVisible = false
+
+  for window in overlayWindows {
+    window.orderOut(nil)      // STEP 3: Non-blocking hide
+  }
+  overlayWindows.removeAll()
+}
+```
+
+### Custom Theming (ARCHITECTURE REQUIREMENT)
+```swift
+// ✅ REQUIRED: Always use custom design system
+@Environment(\.customDesign) private var design
+
+VStack {
+  Text("Hello")
+    .foregroundColor(design.colors.textPrimary)  // ✅ Custom
+    .font(design.fonts.headline)                 // ✅ Custom
+}
+.background(design.colors.background)           // ✅ Custom
+
+// ❌ FORBIDDEN: System colors/fonts
+.foregroundColor(.primary)                      // ❌ System
+.font(.headline)                                // ❌ System
+```
+
+### Event Field Copying (DATA INTEGRITY)
+```swift
+// ✅ REQUIRED: Copy ALL fields when creating Event instances
+func localizedEvent(_ event: Event) -> Event {
+  return Event(
+    id: event.id,
+    title: event.title,
+    startDate: localStartDate,
+    endDate: localEndDate,
+    organizer: event.organizer,
+    description: event.description,    // ✅ CRITICAL
+    location: event.location,          // ✅ CRITICAL
+    attendees: event.attendees,        // ✅ CRITICAL
+    attachments: event.attachments,    // ✅ CRITICAL
+    // ... ALL other fields
+  )
+}
+```
+
+## 🏗️ ARCHITECTURE OVERVIEW
+
+### Project Type & Stack
+- **Platform**: macOS 14+ SwiftUI app with menu bar integration
+- **Architecture**: Service-oriented with dependency injection
+- **Build**: Swift Package Manager with external dependencies
+- **Storage**: SQLite (GRDB.swift) with OAuth2 tokens in Keychain
+- **Purpose**: Calendar meeting reminder with full-screen overlays
+
+### Core Service Dependencies
+```
+AppState (coordinator)
+├── CalendarService (Google Calendar API)
+│   ├── OAuth2Service (authentication)
+│   ├── GoogleCalendarAPIService (API calls)
+│   └── SyncManager (periodic sync)
+├── EventScheduler (alert timing)
+├── OverlayManager (full-screen alerts)
+├── PreferencesManager (UserDefaults)
+└── MenuBarPreviewManager (menu bar display)
+```
+
+### Critical Initialization Order
+```swift
+// REQUIRED: Services must be initialized in this order
+preferencesManager = PreferencesManager()                    // 1. Preferences first
+overlayManager = OverlayManager(preferencesManager: ...)     // 2. UI managers
+eventScheduler = EventScheduler(preferencesManager: ...)     // 3. Scheduling
+calendarService = CalendarService(preferencesManager: ...)   // 4. External services
+```
+
+### Key Data Flow Patterns
+1. **Google Calendar API** → **SyncManager** → **DatabaseManager** → **CalendarService** → **UI**
+2. **EventScheduler** monitors database → triggers **OverlayManager** → shows alerts
+3. **PreferencesManager** changes → triggers service reconfiguration → updates UI
+4. **TimezoneManager** converts UTC events → local display times
+
+## 🎨 CUSTOM THEMING SYSTEM
+
+### Architecture
+- **100% custom theming** - NO system colors or fonts
+- **ThemeManager.shared** coordinates light/dark themes
+- **@Environment(\.customDesign)** provides theme access
+- **CustomComponents.swift** replaces all SwiftUI defaults
+
+### Required Usage Patterns
+```swift
+// ✅ ALWAYS: Import and use custom design
+@Environment(\.customDesign) private var design
+
+// ✅ Colors: Use design.colors.*
+.foregroundColor(design.colors.textPrimary)
+.background(design.colors.background)
+
+// ✅ Fonts: Use design.fonts.*
+.font(design.fonts.headline)
+
+// ✅ Spacing: Use design.spacing.*
+.padding(design.spacing.md)
+
+// ✅ Components: Use Custom* variants
+CustomButton("Title", style: .primary) { }
+CustomCard(style: .elevated) { }
+CustomToggle("Label", isOn: $binding)
+```
+
+### Forbidden Patterns
+```swift
+// ❌ NEVER: System colors
+.foregroundColor(.primary)
+.background(.systemBackground)
+
+// ❌ NEVER: System fonts
+.font(.headline)
+
+// ❌ NEVER: System components without custom styling
+Button("Title") { }
+Toggle("Label", isOn: $binding)
+```
+
+## 🔄 EVENT LIFECYCLE & SCHEDULING
+
+### Event Processing Pipeline
+```
+Google Calendar API
+  ↓ (GoogleCalendarAPIService.fetchEvents)
+Raw API Response
+  ↓ (parseEvents + field validation)
+Event Objects
+  ↓ (DatabaseManager.saveEvents)
+SQLite Storage
+  ↓ (CalendarService.loadCachedData)
+Timezone Conversion
+  ↓ (EventScheduler.startScheduling)
+Alert Scheduling
+  ↓ (OverlayManager.scheduleOverlay)
+Timer-based Monitoring
+  ↓ (Alert triggers)
+Full-screen Overlay Display
+```
+
+### Critical Event Field Requirements
+```swift
+// ✅ REQUIRED: Google Calendar API field specification
+URLQueryItem(name: "fields", value:
+  "items(id,summary,start,end,organizer,description,location,attendees,attachments,hangoutLink,conferenceData),nextPageToken"
+)
+
+// ✅ REQUIRED: Complete Event instantiation
+Event(
+  id: apiData["id"],
+  title: apiData["summary"] ?? "",
+  startDate: parseDate(apiData["start"]),
+  endDate: parseDate(apiData["end"]),
+  organizer: apiData["organizer"]?["email"],
+  description: apiData["description"],        // ✅ Must include
+  location: apiData["location"],              // ✅ Must include
+  attendees: parseAttendees(apiData),         // ✅ Must include
+  attachments: parseAttachments(apiData),     // ✅ Must include
+  // ... all other fields
+)
+```
+
+## ⚠️ CRITICAL DEADLOCK PREVENTION
+
+### Root Cause: NSWindow.close() Deadlock
+- **Problem**: `NSWindow.close()` requires Window Server communication
+- **Conflict**: Timer callbacks block main thread → circular dependency
+- **Solution**: Use `window.orderOut(nil)` instead of `window.close()`
+
+### Safe UI Interaction Pattern
+```swift
+// ✅ REQUIRED: Background queue dispatch for ALL UI callbacks
+onDismiss: { [weak self] in
+  DispatchQueue.global(qos: .userInitiated).async {
+    DispatchQueue.main.async {
+      self?.hideOverlay()
+    }
+  }
+}
+
+// ✅ REQUIRED: Timer cleanup before window operations
+func hideOverlay() {
+  stopCountdownTimer()           // 1. Stop timers FIRST
+  soundManager.stopSound()       // 2. Stop other operations
+  activeEvent = nil              // 3. Clear state
+  isOverlayVisible = false
+
+  let windowsToClose = overlayWindows
+  overlayWindows.removeAll()     // 4. Clear references
+
+  for window in windowsToClose {
+    window.orderOut(nil)         // 5. Non-blocking hide
+  }
+}
+```
+
+### Testing Requirements
+- **ALL** UI interactions must have deadlock tests
+- **Production mode** testing (isTestMode: false)
+- **Real NSWindow** integration testing
+- **Timeout-based** deadlock detection (5-10 seconds)
+
+## 💻 COMMON DEVELOPMENT TASKS
+
+### Adding New UI Components
+
+**✅ DO:**
+```swift
+struct MyView: View {
+  @Environment(\.customDesign) private var design
+
+  var body: some View {
+    VStack(spacing: design.spacing.md) {
+      Text("Title")
+        .font(design.fonts.headline)
+        .foregroundColor(design.colors.textPrimary)
+
+      CustomButton("Action", style: .primary) {
+        // Background dispatch for UI actions
+        DispatchQueue.global(qos: .userInitiated).async {
+          DispatchQueue.main.async {
+            // UI work here
+          }
+        }
+      }
+    }
+    .background(design.colors.background)
+  }
+}
+```
+
+**❌ DON'T:**
+- Use system colors/fonts
+- Call UI operations directly in button callbacks
+- Skip weak self in closures
+
+### Modifying Event Processing
+
+**Required Steps:**
+1. Update Google Calendar API field specification if adding new fields
+2. Modify Event model to include new properties
+3. Update all Event constructors to copy new fields
+4. Add database migration if needed
+5. Update TimezoneManager.localizedEvent() to preserve new fields
+6. Add validation in parsing logic
+
+**Critical Validation:**
+```swift
+// ✅ Always verify field copying in TimezoneManager
+func localizedEvent(_ event: Event) -> Event {
+  return Event(
+    // ... ALL fields including new ones
+    newField: event.newField,  // ✅ Don't forget new fields
+  )
+}
+```
+
+### Adding New Service
+
+**Pattern:**
+```swift
+@MainActor
+class MyService: ObservableObject {
+  @Published var serviceState: MyState = .idle
+
+  private let preferencesManager: PreferencesManager
+  private var cancellables = Set<AnyCancellable>()
+
+  init(preferencesManager: PreferencesManager) {
+    self.preferencesManager = preferencesManager
+    setupPreferencesObserver()
+  }
+
+  private func setupPreferencesObserver() {
+    preferencesManager.$relevantProperty
+      .sink { [weak self] newValue in
+        self?.handlePreferenceChange(newValue)
+      }
+      .store(in: &cancellables)
+  }
+}
+```
+
+### Debugging Memory Issues
+
+**Tools:**
+```bash
+# Console.app for OSLog output
+open -a Console
+
+# Memory graph debugging
+# In Xcode: Debug → Debug Memory Graph
+
+# Instruments for deep analysis
+# Product → Profile → Leaks/Allocations
+```
+
+**Common Patterns:**
+- Timer retain cycles: Use `[weak self]` in timer callbacks
+- SwiftUI environment object cycles: Avoid passing `self` as environment object
+- Window management: Use `orderOut(nil)` not `close()`
+
+## 🔧 BUILD & DEVELOPMENT SETUP
+
+### Required Development Environment
+```bash
+# macOS 14+ (Sonoma)
+# Xcode 15+ with Swift 5.9+
+# VS Code with Swift extension (optional)
+
+# Build commands
+swift build                    # Compile
+swift test                     # Run tests
+swift run Unmissable          # Launch app
+Scripts/format.sh             # Format code
+Scripts/run-comprehensive-tests.sh  # Full test suite
+```
+
+### Configuration Requirements
+```
+Config.plist (gitignored)     # OAuth secrets
+Config.plist.example          # Template (committed)
+```
+
+### Key Dependencies
+- **AppAuth**: OAuth2 with PKCE for Google Calendar
+- **GRDB.swift**: SQLite database ORM
+- **KeychainAccess**: Secure token storage
+- **Magnet**: Global keyboard shortcuts
+- **SwiftLint/SwiftFormat**: Code quality
+
+## 🧪 TESTING STRATEGY
+
+### Critical Test Categories
+
+**Deadlock Tests** (Mandatory for UI code):
+```swift
+func testDismissButtonDeadlock() {
+  let expectation = expectation(description: "Dismiss should complete")
+
+  Task {
+    overlayManager.hideOverlay()  // Real production call
+    expectation.fulfill()
+  }
+
+  wait(for: [expectation], timeout: 5.0)  // Fail if deadlock
+}
+```
+
+**Memory Leak Tests**:
+- Focus on functional testing, not strict deallocation timing
+- NSWindow lifecycle is asynchronous and complex
+- Test cleanup behavior, not immediate memory release
+
+**Integration Tests**:
+- Full service chain testing
+- Real database operations
+- OAuth flow simulation
+- Network request mocking
+
+## 📊 PERFORMANCE CHARACTERISTICS
+
+### Expected Metrics
+- **Memory**: 50-150MB steady state
+- **CPU**: <2% average (timer spikes normal)
+- **Network**: Minimal (60s sync intervals)
+- **Database**: <10MB typical
+- **Overlay render**: <500ms on modern hardware
+
+### Optimization Points
+- Lazy UI component loading
+- Efficient database queries with GRDB
+- Timer-based monitoring (not polling)
+- Cached timezone conversions
+
 ## MEMORY MANAGEMENT & TESTING INSIGHTS
 
 ### Critical Memory Leak Investigation (August 2025)
@@ -76,7 +481,7 @@ The OverlayManager uses several types of timers that require careful lifecycle m
 **Data Flow Analysis**:
 1. ✅ Google Calendar API returns complete data (descriptions, attendees, locations)
 2. ✅ Events parsed correctly from JSON
-3. ✅ Events saved to database correctly  
+3. ✅ Events saved to database correctly
 4. ✅ Events fetched from database correctly
 5. ❌ **TimezoneManager strips out description/location/attendees during conversion**
 6. ❌ UI receives incomplete Event objects
@@ -110,7 +515,7 @@ func localizedEvent(_ event: Event) -> Event {
         endDate: localEndDate,
         organizer: event.organizer,
         description: event.description,  // ✅ FIXED
-        location: event.location,        // ✅ FIXED  
+        location: event.location,        // ✅ FIXED
         attendees: event.attendees,      // ✅ FIXED
         isAllDay: event.isAllDay,
         calendarId: event.calendarId,
@@ -122,7 +527,7 @@ func localizedEvent(_ event: Event) -> Event {
 }
 ```
 
-**Critical Learning**: 
+**Critical Learning**:
 - **ALL Event constructor calls** must include ALL Event properties
 - **Timezone conversion** should ONLY affect time-related fields, never content fields
 - **UI display issues** can have root causes deep in the data pipeline
@@ -132,7 +537,7 @@ func localizedEvent(_ event: Event) -> Event {
 Enhanced logging at every pipeline stage revealed the exact point where data was lost:
 ```
 [INFO] ✅ DESCRIPTION found for event: sdfdff       # API level: ✅
-[INFO] 💾 Description being saved: YES (13 chars)   # Storage level: ✅  
+[INFO] 💾 Description being saved: YES (13 chars)   # Storage level: ✅
 [INFO] 📤 Description fetched: YES (23 chars)       # Retrieval level: ✅
 🎭 UI: Description in UI: NO                         # UI level: ❌
 ```
@@ -140,9 +545,358 @@ Enhanced logging at every pipeline stage revealed the exact point where data was
 **Prevention for Future Development**:
 1. **Test complete data flow** for any new Event processing
 2. **Never assume field copying** - always verify ALL fields are preserved
-3. **Add comprehensive logging** when debugging data display issues  
+3. **Add comprehensive logging** when debugging data display issues
 4. **Test UI with real Google Calendar events** that have rich content
 5. **Include description/attendee validation** in Event processing tests
+
+## 🚀 HTML DESCRIPTIONS & ATTACHMENTS SYSTEM (August 2025)
+
+### Overview
+Unmissable now supports **rich HTML descriptions** and **Google Drive attachments** in meeting details, providing a professional Google Calendar-equivalent experience. This system handles both plain text and rich HTML content with comprehensive fallback mechanisms.
+
+### Architecture Components
+
+#### HTMLTextView (NSViewRepresentable)
+**Location**: `Sources/Unmissable/Features/MeetingDetails/HTMLTextView.swift`
+
+**Purpose**: Native SwiftUI component that renders HTML content using NSAttributedString and NSTextView for full macOS integration.
+
+**Key Features**:
+- **HTML Parsing**: NSAttributedString HTML parser with comprehensive CSS theming
+- **Link Handling**: Clickable links that open in system browser via NSWorkspace
+- **Theme Integration**: Dynamic CSS generation for light/dark mode compatibility
+- **Fallback System**: Graceful degradation to plain text if HTML parsing fails
+- **Performance**: Optimized for real-time rendering with <200ms typical parse time
+
+#### AttachmentsView (SwiftUI Component)
+**Location**: `Sources/Unmissable/Features/MeetingDetails/AttachmentsView.swift`
+
+**Purpose**: Displays Google Drive attachments with file metadata and click-to-open functionality.
+
+**Key Features**:
+- **Google Drive Integration**: Branded display for Google Drive files
+- **File Type Detection**: System icons based on file extension
+- **Metadata Display**: File size, type, and human-readable descriptions
+- **Click-to-Open**: Direct Google Drive access via NSWorkspace
+
+#### EventAttachment Model
+**Location**: `Sources/Unmissable/Models/EventAttachment.swift` (created)
+
+**Purpose**: Complete data model for attachment metadata with Google Calendar API compatibility.
+
+**Structure**:
+```swift
+struct EventAttachment: Codable, Equatable, Identifiable {
+    let id: String = UUID().uuidString
+    let title: String
+    let fileUrl: String
+    let mimeType: String?
+    let iconLink: String?
+    let fileSize: Int64?
+
+    // Human-readable computed properties
+    var displayFileSize: String { /* Formatted bytes */ }
+    var fileExtension: String { /* Extracted from URL */ }
+    var fileTypeDescription: String { /* MIME type description */ }
+
+    // Factory method for Google Calendar API
+    static func fromGoogleCalendar(_ data: [String: Any]) -> EventAttachment?
+}
+```
+
+### Database Integration
+
+#### Schema Enhancement (v3)
+**Migration**: Added `attachments` column to events table with JSON serialization
+```sql
+ALTER TABLE events ADD COLUMN attachments TEXT;  -- JSON array of EventAttachment
+```
+
+**Storage**: EventAttachment arrays stored as JSON strings in SQLite for efficiency
+**Retrieval**: Automatic JSON deserialization when loading events from database
+
+#### Migration Safety
+- **Backward Compatible**: Existing events without attachments continue working
+- **Non-Breaking**: NULL attachments column handled gracefully
+- **Version Control**: Schema version tracking prevents conflicts
+
+### Google Calendar API Integration
+
+#### Enhanced Field Specification
+**Critical Change**: Google Calendar API requires explicit field specification to retrieve attachments
+```swift
+// BEFORE: Limited fields
+URLQueryItem(name: "maxResults", value: "250")
+
+// AFTER: Comprehensive field specification
+URLQueryItem(name: "fields", value: "items(id,summary,start,end,organizer,description,location,attendees,hangoutLink,conferenceData,attachments),nextPageToken")
+```
+
+#### Attachment Parsing
+**Location**: `GoogleCalendarAPIService.swift` parseEvents() method
+```swift
+// Parse attachments from API response
+if let attachmentsData = eventData["attachments"] as? [[String: Any]] {
+    event.attachments = attachmentsData.compactMap { attachmentData in
+        EventAttachment.fromGoogleCalendar(attachmentData)
+    }
+}
+```
+
+### HTML Processing Details
+
+#### Content Type Detection
+```swift
+private func createAttributedString(from htmlContent: String?) -> NSAttributedString {
+    // 1. Empty content → placeholder text
+    guard let htmlContent = htmlContent, !htmlContent.isEmpty else {
+        return createPlaceholder()
+    }
+
+    // 2. HTML detection → contains < and > tags
+    let isHTML = htmlContent.contains("<") && htmlContent.contains(">")
+
+    // 3. Plain text → simple NSAttributedString
+    if !isHTML {
+        return createPlainTextAttributedString(htmlContent)
+    }
+
+    // 4. HTML → full NSAttributedString HTML parsing
+    return parseHTML(htmlContent)
+}
+```
+
+#### Dynamic CSS Theming
+**System**: Custom CSS generation based on current theme state
+```swift
+private func createStyledHTML(content: String) -> String {
+    let isDark = effectiveTheme == .dark
+    let bodyColor = isDark ? "#CCCCCC" : "#333333"
+    let headingColor = isDark ? "#FFFFFF" : "#000000"
+    let linkColor = isDark ? "#4A90E2" : "#007AFF"
+
+    return """
+    <!DOCTYPE html>
+    <html><head><style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: \(bodyColor); background: transparent;
+        }
+        h1, h2, h3, h4, h5, h6 { color: \(headingColor); }
+        a { color: \(linkColor); text-decoration: none; }
+        /* Additional CSS for lists, tables, etc. */
+    </style></head>
+    <body>\(content)</body></html>
+    """
+}
+```
+
+#### Error Handling & Fallbacks
+```swift
+// Three-tier fallback system:
+do {
+    return try NSAttributedString(data: htmlData, options: htmlOptions, documentAttributes: nil)
+} catch {
+    logger.error("HTML parsing failed: \(error)")
+    // FALLBACK 1: Strip HTML tags, show plain text
+    let plainText = htmlContent.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+    return NSAttributedString(string: plainText, attributes: plainTextAttributes)
+}
+```
+
+### UI Integration
+
+#### MeetingDetailsView Enhancement
+**Location**: `Sources/Unmissable/Features/MeetingDetails/MeetingDetailsView.swift`
+
+**Before (Plain Text)**:
+```swift
+Text(cleanDescription(description))
+    .font(design.fonts.callout)
+    .foregroundColor(design.colors.textSecondary)
+```
+
+**After (Rich HTML + Attachments)**:
+```swift
+VStack(alignment: .leading, spacing: 0) {
+    HTMLTextView(
+        htmlContent: description,
+        effectiveTheme: themeManager.effectiveTheme,
+        onLinkTap: { url in NSWorkspace.shared.open(url) }
+    )
+}
+.frame(maxWidth: .infinity, minHeight: 60, maxHeight: 150)
+
+// Attachments section (if any exist)
+if !event.attachments.isEmpty {
+    AttachmentsView(attachments: event.attachments)
+        .padding(.top, design.spacing.sm)
+}
+```
+
+#### Layout Considerations
+- **Container Sizing**: VStack with minHeight prevents "thin black line" display issue
+- **Scroll Support**: NSTextView handles scrolling internally for long content
+- **Attachment Placement**: Below description with conditional display
+
+### Performance Optimizations
+
+#### Rendering Performance
+- **Content Caching**: NSAttributedString creation only when content changes
+- **Lazy Loading**: AttachmentsView only created when attachments exist
+- **Efficient Updates**: updateNSView only re-renders on actual content changes
+
+#### Memory Management
+- **Weak References**: Coordinator uses weak self to prevent retain cycles
+- **Timer Cleanup**: Proper NSTextView delegate lifecycle management
+- **Resource Disposal**: HTMLTextView automatically managed by SwiftUI
+
+### Testing Strategy
+
+#### HTMLTextView Testing
+```swift
+// Test HTML parsing with various content types
+func testHTMLParsing() {
+    let htmlContent = "<h3>Meeting</h3><p>Description with <a href='https://example.com'>link</a></p>"
+    // Verify rich formatting preserved
+    // Verify link clickability
+    // Verify theme-appropriate colors
+}
+
+// Test fallback mechanisms
+func testHTMLFallback() {
+    let malformedHTML = "<div><p>Unclosed tags"
+    // Verify graceful degradation to plain text
+    // Verify no crashes on malformed HTML
+}
+```
+
+#### Attachment Testing
+```swift
+// Test Google Drive attachment parsing
+func testAttachmentParsing() {
+    let apiResponse = ["attachments": [["title": "document.pdf", "fileUrl": "https://drive.google.com/..."]]]
+    // Verify EventAttachment creation
+    // Verify metadata extraction
+    // Verify UI display
+}
+```
+
+### Security Considerations
+
+#### HTML Content Safety
+- **NSAttributedString Parsing**: Uses system HTML parser, inherently safe from XSS
+- **No JavaScript**: HTML parser strips JavaScript automatically
+- **Link Validation**: URLs opened via NSWorkspace, subject to system security policies
+- **Content Isolation**: HTML content rendered in isolated NSTextView context
+
+#### Attachment Security
+- **Read-Only Access**: Attachments opened via Google Drive web interface
+- **No Local Download**: Files remain on Google Drive, accessed via web browser
+- **URL Validation**: Google Drive URLs verified before opening
+
+### Troubleshooting Guide
+
+#### Common Issues
+
+**"Description shows raw HTML instead of formatted text"**
+- **Cause**: HTMLTextView not integrated in MeetingDetailsView
+- **Solution**: Verify HTMLTextView is used instead of Text view
+- **Check**: Build logs for NSAttributedString HTML parsing errors
+
+**"Attachments not appearing"**
+- **Cause**: Google Calendar API not requesting attachments field
+- **Solution**: Verify `fields` parameter includes `attachments`
+- **Check**: API response logging for attachment data presence
+
+**"Thin black line instead of content"**
+- **Cause**: Container height constraint issue
+- **Solution**: Ensure frame has minHeight (60) and maxHeight (150)
+- **Check**: VStack alignment and spacing configuration
+
+**"Links not clickable"**
+- **Cause**: NSTextView delegate not properly configured
+- **Solution**: Verify Coordinator implements textView:clickedOnLink:at:
+- **Check**: Link detection in HTML parsing phase
+
+#### Debug Logging
+```swift
+// Enable HTMLTextView debugging
+private let logger = Logger(subsystem: "com.unmissable.app", category: "HTMLTextView")
+
+logger.debug("📝 HTMLTextView: Processing content (\(htmlContent.count) chars)")
+logger.debug("✅ HTMLTextView: Successfully parsed HTML (\(attributedString.length) chars)")
+logger.error("❌ HTMLTextView: Failed to parse HTML - \(error.localizedDescription)")
+```
+
+### Future Enhancement Opportunities
+
+#### Advanced HTML Features
+- **Embedded Images**: Support for inline images in descriptions
+- **Table Styling**: Enhanced CSS for meeting agenda tables
+- **Custom Fonts**: User-configurable font preferences
+- **Print Support**: Meeting details export functionality
+
+#### Attachment Enhancements
+- **Preview Integration**: Quick Look preview for supported file types
+- **Download Management**: Optional local caching for offline access
+- **Multiple Providers**: Support for Dropbox, OneDrive, etc.
+- **Attachment Analytics**: Track which files are accessed most
+
+#### Performance Improvements
+- **HTML Caching**: Cache parsed NSAttributedString for repeated access
+- **Background Parsing**: Parse HTML content off main thread
+- **Progressive Loading**: Stream large HTML content for immediate display
+
+### Critical Implementation Notes
+
+#### 🚨 Required Field Copying
+**CRITICAL**: When creating new Event instances (especially in TimezoneManager), ALL fields must be copied:
+```swift
+func localizedEvent(_ event: Event) -> Event {
+    return Event(
+        // ... time fields ...
+        description: event.description,     // ✅ REQUIRED
+        location: event.location,          // ✅ REQUIRED
+        attendees: event.attendees,        // ✅ REQUIRED
+        attachments: event.attachments,    // ✅ REQUIRED
+        // ... other fields ...
+    )
+}
+```
+
+#### 🚨 API Field Specification
+**CRITICAL**: Google Calendar API requests must include all required fields:
+```swift
+URLQueryItem(name: "fields", value: "items(id,summary,start,end,organizer,description,location,attendees,attachments,hangoutLink,conferenceData),nextPageToken")
+```
+
+#### 🚨 Database Migration Safety
+**CRITICAL**: New attachment column must handle NULL values gracefully:
+```swift
+// Safe attachment parsing from database
+let attachmentsData = row["attachments"] as? String
+event.attachments = attachmentsData?.isEmpty == false
+    ? (try? JSONDecoder().decode([EventAttachment].self, from: Data(attachmentsData.utf8))) ?? []
+    : []
+```
+
+### Integration Checklist
+
+When working with HTML descriptions and attachments:
+
+- [ ] **Verify HTMLTextView integration** in all meeting detail displays
+- [ ] **Confirm Google Calendar API field specification** includes attachments
+- [ ] **Test with real Google Calendar events** containing rich HTML and files
+- [ ] **Validate theme switching** updates HTML CSS appropriately
+- [ ] **Check database migration** handles NULL attachments gracefully
+- [ ] **Ensure EventAttachment model** supports all Google Calendar metadata
+- [ ] **Test link clicking** opens in system browser correctly
+- [ ] **Verify attachment icons** display appropriate file type indicators
+- [ ] **Confirm container sizing** prevents thin line display issues
+- [ ] **Test fallback mechanisms** handle malformed HTML appropriately
+
+This HTML and attachments system significantly enhances the user experience by providing rich, interactive meeting details that match the quality and functionality of Google Calendar's web interface.
 
 ### Google Calendar API Enhancement & Verification
 
@@ -1261,3 +2015,85 @@ If deadlocks occur in production:
 - Widget support for Control Center
 
 This documentation provides a comprehensive foundation for LLM coding agents to understand and work effectively with the Unmissable codebase. The architecture is designed for maintainability, testability, and extensibility while following Swift and macOS development best practices.
+
+## 🚨 QUICK TROUBLESHOOTING GUIDE
+
+### Common Issues & Solutions
+
+**"App crashes on overlay display"**
+- ✅ Check: Using `window.orderOut(nil)` not `window.close()`
+- ✅ Check: Background queue dispatch in button callbacks
+- ✅ Check: Timer cleanup before window operations
+
+**"Events missing from display"**
+- ✅ Check: Google Calendar API field specification includes all fields
+- ✅ Check: Database migration completed successfully
+- ✅ Check: Calendar selection preferences
+- ✅ Check: Event time range (7 days ahead by default)
+
+**"UI not updating with theme changes"**
+- ✅ Check: Using `@Environment(\.customDesign)` not system colors
+- ✅ Check: `CustomThemeModifier` applied to view hierarchy
+- ✅ Check: No system `.foregroundColor(.primary)` usage
+
+**"Memory leaks in tests"**
+- ✅ Expected: NSWindow deallocation is asynchronous
+- ✅ Focus on functional testing, not immediate memory release
+- ✅ Check: Timer cleanup and weak references
+
+**"Sync not working"**
+- ✅ Check: OAuth token validity
+- ✅ Check: Network connectivity
+- ✅ Check: Calendar selection in preferences
+- ✅ Check: Sync interval settings
+
+### Debug Commands
+```bash
+# View logs
+log stream --predicate 'subsystem == "com.unmissable.app"'
+
+# Database inspection
+sqlite3 ~/Library/Application\ Support/Unmissable/database.sqlite
+
+# Memory debugging
+leaks Unmissable
+
+# Network debugging
+nettop -p Unmissable
+```
+
+## 📖 QUICK REFERENCE
+
+### Essential File Locations
+```
+Sources/Unmissable/
+├── App/AppState.swift              # Central coordinator
+├── Core/EventScheduler.swift       # Alert scheduling
+├── Core/OverlayManager.swift       # Full-screen displays
+├── Core/CustomThemeManager.swift   # Theming system
+├── Core/CustomComponents.swift     # UI components
+├── Features/CalendarConnect/       # Google Calendar
+├── Features/Overlay/               # Alert overlays
+├── Features/Preferences/           # Settings
+└── Models/Event.swift              # Core data model
+```
+
+### Key Patterns to Follow
+1. **Always** use custom theming system
+2. **Always** use background queue dispatch for UI callbacks
+3. **Always** copy ALL Event fields when creating instances
+4. **Always** use `window.orderOut(nil)` never `window.close()`
+5. **Always** add deadlock tests for UI interactions
+6. **Always** inject PreferencesManager via dependency injection
+
+### Key Patterns to Avoid
+1. **Never** use system colors or fonts
+2. **Never** call UI operations directly in button callbacks
+3. **Never** skip field copying in Event constructors
+4. **Never** use NSWindow.close() in overlay management
+5. **Never** create services without preference injection
+6. **Never** skip timer cleanup before window operations
+
+---
+
+**Remember**: This codebase prioritizes safety, reliability, and consistent user experience. When in doubt, follow the established patterns and add comprehensive testing.

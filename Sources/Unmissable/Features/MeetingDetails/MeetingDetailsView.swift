@@ -4,28 +4,31 @@ struct MeetingDetailsView: View {
   let event: Event
   @Environment(\.customDesign) private var design
   @Environment(\.dismiss) private var dismiss
+  @ObservedObject private var themeManager = ThemeManager.shared
 
   var body: some View {
     VStack(spacing: 0) {
       // DEBUG: Log what event data the UI receives
       let _ = {
         print("🎭 UI: MeetingDetailsView displaying event: \(event.title)")
-        print("🎭 UI: Description in UI: \(event.description != nil ? "YES (\(event.description!.count) chars)" : "NO")")
+        print(
+          "🎭 UI: Description in UI: \(event.description != nil ? "YES (\(event.description!.count) chars)" : "NO")"
+        )
         print("🎭 UI: Attendees in UI: \(event.attendees.count) attendees")
         fflush(stdout)
-        
+
         // Also write to file
         let logContent = """
-        🎭 UI: MeetingDetailsView displaying event: \(event.title)
-        🎭 UI: Description in UI: \(event.description != nil ? "YES (\(event.description!.count) chars)" : "NO")
-        🎭 UI: Attendees in UI: \(event.attendees.count) attendees
-        """
+          🎭 UI: MeetingDetailsView displaying event: \(event.title)
+          🎭 UI: Description in UI: \(event.description != nil ? "YES (\(event.description!.count) chars)" : "NO")
+          🎭 UI: Attendees in UI: \(event.attendees.count) attendees
+          """
         if let data = logContent.data(using: .utf8) {
           let url = URL(fileURLWithPath: "/tmp/unmissable_ui_debug.log")
           try? data.write(to: url)
         }
       }()
-      
+
       // Header with title and close button
       headerSection
 
@@ -186,18 +189,26 @@ struct MeetingDetailsView: View {
           .foregroundColor(design.colors.textPrimary)
       }
 
-      ScrollView(.vertical, showsIndicators: true) {
-        Text(cleanDescription(description))
-          .font(design.fonts.callout)
-          .foregroundColor(design.colors.textSecondary)
-          .lineLimit(nil)
-          .multilineTextAlignment(.leading)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.vertical, design.spacing.xs)
+      // HTML Content container with proper sizing
+      VStack(alignment: .leading, spacing: 0) {
+        HTMLTextView(
+          htmlContent: description,
+          effectiveTheme: themeManager.effectiveTheme,
+          onLinkTap: { url in
+            NSWorkspace.shared.open(url)
+          }
+        )
       }
-      .frame(maxHeight: 150)
+      .frame(maxWidth: .infinity, minHeight: 60, maxHeight: 150, alignment: Alignment.topLeading)
+      .padding(.vertical, design.spacing.xs)
       .background(design.colors.background)
       .cornerRadius(design.corners.small)
+
+      // Show attachments if available
+      if !event.attachments.isEmpty {
+        AttachmentsView(attachments: event.attachments)
+          .padding(.top, design.spacing.sm)
+      }
     }
     .padding(design.spacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
