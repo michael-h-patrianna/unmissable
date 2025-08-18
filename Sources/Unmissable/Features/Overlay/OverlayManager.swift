@@ -164,13 +164,13 @@ class OverlayManager: ObservableObject, OverlayManaging {
     } else {
       // Fallback to Task-based method if EventScheduler not available
       logger.warning("⚠️ EventScheduler not available, using fallback Task")
-      
+
       snoozeTask = Task { @MainActor in
         do {
           let snoozeSeconds = TimeInterval(minutes * 60)
           logger.info("⏰ SNOOZE: Starting \(snoozeSeconds)s delay")
           try await Task.sleep(for: .seconds(snoozeSeconds))
-          
+
           if !Task.isCancelled {
             logger.info("⏰ SNOOZE: Delay complete, showing overlay")
             showOverlay(for: event, minutesBeforeMeeting: 2, fromSnooze: true)
@@ -198,13 +198,13 @@ class OverlayManager: ObservableObject, OverlayManaging {
 
       // Cancel any existing schedule task before creating new one
       scheduleTask?.cancel()
-      
+
       // CRITICAL FIX: Use Task-based scheduling to ensure proper thread safety
       scheduleTask = Task { @MainActor in
         do {
           logger.info("⏰ SCHEDULE: Starting \(timeUntilShow)s delay for \(event.title)")
           try await Task.sleep(for: .seconds(timeUntilShow))
-          
+
           if !Task.isCancelled {
             logger.info("🔥 TASK FIRED: Attempting to show overlay for \(event.title)")
             logger.info("📱 MAIN QUEUE: Calling showOverlay for \(event.title)")
@@ -217,7 +217,7 @@ class OverlayManager: ObservableObject, OverlayManaging {
           logger.info("⏰ SCHEDULE: Task cancelled/interrupted for \(event.title)")
         }
       }
-      
+
       logger.info("📝 TASK SCHEDULED: Schedule task created for \(event.title)")
     } else {
       logger.warning(
@@ -329,7 +329,7 @@ class OverlayManager: ObservableObject, OverlayManaging {
       countdownTask = nil
       logger.debug("⏹️ TASK: Countdown task cancelled and deallocated")
     }
-    
+
     // Also clean up any legacy Timer (for transition period)
     if let timer = countdownTimer {
       timer.invalidate()
@@ -344,14 +344,14 @@ class OverlayManager: ObservableObject, OverlayManaging {
       timer.invalidate()
     }
     scheduledTimers.removeAll()
-    
+
     // Cancel snooze task
     if let snoozeTask = snoozeTask {
       snoozeTask.cancel()
       self.snoozeTask = nil
       logger.debug("🧹 CLEANUP: Cancelled snooze task")
     }
-    
+
     // Cancel schedule task
     if let scheduleTask = scheduleTask {
       scheduleTask.cancel()

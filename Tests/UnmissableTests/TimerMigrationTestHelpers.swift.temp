@@ -1,36 +1,38 @@
-import XCTest
 import Foundation
+import XCTest
+
 @testable import Unmissable
 
 /// Test helpers specifically for timer migration validation
 /// Ensures consistent testing patterns across all timer modernization phases
 class TimerMigrationTestHelpers: XCTestCase {
-  
+
   /// Standard timing tolerance for timer tests
   static let timingTolerance: TimeInterval = 0.1  // 100ms tolerance
-  
+
   /// Extended tolerance for longer timers (>10 seconds)
   static let extendedTimingTolerance: TimeInterval = 1.0  // 1 second tolerance
-  
+
   /// Memory leak detection timeout
   static let memoryLeakTimeout: TimeInterval = 2.0
-  
+
   /// Create a test-safe preferences manager with known values
+  @MainActor
   static func createTestPreferencesManager() -> PreferencesManager {
     let prefs = PreferencesManager()
-    
+
     // Set known test values that don't conflict with migration
     prefs.defaultAlertMinutes = 2  // Use consistent test value
     prefs.useLengthBasedTiming = false
     prefs.shortMeetingAlertMinutes = 1
     prefs.mediumMeetingAlertMinutes = 3
     prefs.longMeetingAlertMinutes = 5
-    prefs.soundEnabled = false  // Disable sound in tests
+    // Note: soundEnabled is computed, cannot be set
     prefs.overlayOpacity = 0.8
-    
+
     return prefs
   }
-  
+
   /// Create a test event with predictable timing
   static func createTestEvent(
     minutesInFuture: Int = 5,
@@ -38,23 +40,30 @@ class TimerMigrationTestHelpers: XCTestCase {
     id: String? = nil
   ) -> Event {
     let startDate = Date().addingTimeInterval(TimeInterval(minutesInFuture * 60))
-    let endDate = startDate.addingTimeInterval(1800) // 30 minute meeting
-    
+    let endDate = startDate.addingTimeInterval(1800)  // 30 minute meeting
+
     return Event(
       id: id ?? UUID().uuidString,
       title: title,
-      description: "Test event for timer migration validation",
       startDate: startDate,
       endDate: endDate,
+      organizer: "test@example.com",
+      description: "Test event for timer migration validation",
       location: "Test Location",
-      isAllDay: false,
       attendees: [],
+      attachments: [],
+      isAllDay: false,
       calendarId: "test-calendar",
-      primaryLink: URL(string: "https://test.example.com"),
-      additionalLinks: []
+      timezone: TimeZone.current.identifier,
+      links: [],
+      provider: nil,
+      snoozeUntil: nil,
+      autoJoinEnabled: false,
+      createdAt: Date(),
+      updatedAt: Date()
     )
   }
-  
+
   /// Validate timer accuracy within tolerance
   static func validateTimerAccuracy(
     expected: Date,
@@ -72,7 +81,7 @@ class TimerMigrationTestHelpers: XCTestCase {
       line: line
     )
   }
-  
+
   /// Create expectation with standard timeout for timer tests
   static func createTimerExpectation(
     description: String,
@@ -81,7 +90,7 @@ class TimerMigrationTestHelpers: XCTestCase {
     let expectation = XCTestExpectation(description: description)
     return expectation
   }
-  
+
   /// Wait for expectations with timer-appropriate timeout
   static func waitForTimerExpectations(
     _ expectations: [XCTestExpectation],
@@ -105,7 +114,7 @@ class TimerMigrationTestHelpers: XCTestCase {
       XCTFail("Unknown timer expectation result", file: file, line: line)
     }
   }
-  
+
   /// Log timing metrics for performance analysis
   static func logTimingMetrics(
     operation: String,
@@ -116,7 +125,7 @@ class TimerMigrationTestHelpers: XCTestCase {
     let error = actual.timeIntervalSince(expected)
     let accuracy = abs(error)
     let successRate = 1.0 - (accuracy / tolerance)
-    
+
     print("⏱️ TIMING METRICS:")
     print("   Operation: \(operation)")
     print("   Expected: \(expected)")
@@ -126,17 +135,17 @@ class TimerMigrationTestHelpers: XCTestCase {
     print("   Success Rate: \(String(format: "%.1f", successRate * 100))%")
     print("   Within Tolerance: \(accuracy <= tolerance ? "✅" : "❌")")
   }
-  
+
   /// Memory pressure simulation for testing Task-based timers under load
   static func simulateMemoryPressure(
     timerCount: Int = 100,
     duration: TimeInterval = 5.0
   ) async {
     print("💾 MEMORY PRESSURE: Creating \(timerCount) timers for \(duration)s")
-    
+
     var tasks: [Task<Void, Never>] = []
-    
-    for i in 0..<timerCount {
+
+    for _ in 0..<timerCount {
       let task = Task {
         do {
           try await Task.sleep(for: .seconds(duration))
@@ -146,15 +155,15 @@ class TimerMigrationTestHelpers: XCTestCase {
       }
       tasks.append(task)
     }
-    
+
     // Let them run briefly
     try? await Task.sleep(for: .milliseconds(100))
-    
+
     // Cancel all
     for task in tasks {
       task.cancel()
     }
-    
+
     print("💾 MEMORY PRESSURE: Cleaned up \(timerCount) timers")
   }
 }
@@ -162,12 +171,12 @@ class TimerMigrationTestHelpers: XCTestCase {
 // MARK: - Timer Type Specific Helpers
 
 extension TimerMigrationTestHelpers {
-  
+
   /// Helpers specific to countdown timer testing
   enum CountdownTimer {
     static let updateInterval: TimeInterval = 1.0
     static let tolerance: TimeInterval = 0.05  // 50ms for 1-second updates
-    
+
     static func validateCountdownAccuracy(
       iterations: Int,
       actualDuration: TimeInterval,
@@ -185,22 +194,22 @@ extension TimerMigrationTestHelpers {
       )
     }
   }
-  
+
   /// Helpers specific to snooze timer testing
   enum SnoozeTimer {
     static let tolerance: TimeInterval = 1.0  // 1 second for longer delays
-    
+
     static func createSnoozeTestEvent(snoozeMinutes: Int = 5) -> Event {
       // Create event that "already happened" so we can test snooze
-      let pastDate = Date().addingTimeInterval(-300) // 5 minutes ago
+      _ = Date().addingTimeInterval(-300)  // 5 minutes ago
       return createTestEvent(minutesInFuture: -5, title: "Snooze Test Event")
     }
   }
-  
+
   /// Helpers specific to schedule timer testing
   enum ScheduleTimer {
     static let tolerance: TimeInterval = 1.0  // 1 second for scheduling accuracy
-    
+
     static func validateSchedulingAccuracy(
       events: [Event],
       expectedTriggers: [Date],
@@ -215,7 +224,7 @@ extension TimerMigrationTestHelpers {
         file: file,
         line: line
       )
-      
+
       for (expected, actual) in zip(expectedTriggers, actualTriggers) {
         validateTimerAccuracy(
           expected: expected,
