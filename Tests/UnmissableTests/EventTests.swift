@@ -50,7 +50,7 @@ final class EventTests: XCTestCase {
 
   func testEventTimezoneHandling() {
     let utcDate = Date()
-    let pstTimeZone = TimeZone(identifier: "America/Los_Angeles")!
+    _ = TimeZone(identifier: "America/Los_Angeles")!
 
     let event = Event(
       id: "test-timezone",
@@ -61,10 +61,8 @@ final class EventTests: XCTestCase {
       timezone: "America/Los_Angeles"
     )
 
-    // Local date should be different from UTC if we're not in PST
-    if TimeZone.current != pstTimeZone {
-      XCTAssertNotEqual(event.localStartDate, event.startDate)
-    }
+    // Dates represent absolute instants; convenience properties should not shift time
+    XCTAssertEqual(event.localStartDate, event.startDate)
   }
 
   func testEventEquality() {

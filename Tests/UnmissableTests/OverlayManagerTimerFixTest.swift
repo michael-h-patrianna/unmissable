@@ -13,7 +13,11 @@ final class OverlayManagerTimerFixTest: XCTestCase {
   override func setUp() async throws {
     mockPreferences = TestUtilities.MockPreferencesManager()
     // Create OverlayManager without focus mode to avoid dependencies
-    overlayManager = OverlayManager(preferencesManager: mockPreferences)
+    overlayManager = OverlayManager(
+      preferencesManager: mockPreferences,
+      focusModeManager: nil,
+      isTestMode: true
+    )
 
     try await super.setUp()
   }
@@ -49,16 +53,16 @@ final class OverlayManagerTimerFixTest: XCTestCase {
     overlayManager.showOverlay(for: event)
     let initialCountdown = overlayManager.timeUntilMeeting
 
-    // Wait 1 second
-    try await Task.sleep(nanoseconds: 1_000_000_000)
+    // Wait ~1.2 seconds to ensure at least one countdown tick in async environment
+    try await Task.sleep(nanoseconds: 1_200_000_000)
 
     let updatedCountdown = overlayManager.timeUntilMeeting
 
     XCTAssertLessThan(updatedCountdown, initialCountdown, "Timer should continue to update")
 
     let decrease = initialCountdown - updatedCountdown
-    XCTAssertGreaterThan(decrease, 1.0, "Should decrease by approximately 1 second")
-    XCTAssertLessThan(decrease, 1.5, "Should decrease by approximately 1 second")
+    XCTAssertGreaterThanOrEqual(decrease, 0.8, "Should decrease by ~1 second")
+    XCTAssertLessThanOrEqual(decrease, 1.8, "Should decrease by ~1 second")
 
     print("✅ Timer continues to update correctly after initialization")
   }

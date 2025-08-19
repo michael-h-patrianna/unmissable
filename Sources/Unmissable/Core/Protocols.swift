@@ -81,11 +81,15 @@ class TestSafeOverlayManager: OverlayManaging {
     print("🎯 TEST-SAFE SCHEDULE: Event '\(event.title)' should trigger in \(timeUntilShow)s")
 
     if timeUntilShow > 0 {
-      Timer.scheduledTimer(withTimeInterval: timeUntilShow, repeats: false) { [weak self] _ in
-        Task { @MainActor in
+      // Swift 5.10+ compatible: Use Task.sleep instead of Timer for better concurrency
+      Task { @MainActor in
+        do {
+          try await Task.sleep(for: .seconds(timeUntilShow))
           print("🔥 TEST-SAFE TIMER: Firing for \(event.title)")
-          self?.showOverlay(
+          self.showOverlay(
             for: event, minutesBeforeMeeting: minutesBeforeMeeting, fromSnooze: false)
+        } catch {
+          print("⏰ TEST-SAFE: Task cancelled for \(event.title)")
         }
       }
     }

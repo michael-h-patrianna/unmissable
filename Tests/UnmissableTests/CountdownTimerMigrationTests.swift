@@ -5,6 +5,7 @@ import XCTest
 
 /// Test cases specifically for countdown timer migration validation
 /// These tests establish baseline behavior before migration and validate Task-based implementation
+@MainActor
 class CountdownTimerMigrationTests: XCTestCase {
 
   var overlayManager: OverlayManager!

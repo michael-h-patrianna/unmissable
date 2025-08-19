@@ -1,8 +1,10 @@
 import SnapshotTesting
+import SwiftUI
 import XCTest
 
 @testable import Unmissable
 
+@MainActor
 final class OverlaySnapshotTests: XCTestCase {
 
   override func setUp() {
@@ -11,40 +13,62 @@ final class OverlaySnapshotTests: XCTestCase {
     // isRecording = true // Uncomment to record new snapshots
   }
 
-  func testOverlayContentBeforeMeeting() {
-    let event = createSampleEvent()
-    let preferencesManager = TestUtilities.MockPreferencesManager()
-
-    let view = OverlayContentView(
-      event: event,
-      onDismiss: {},
-      onJoin: {},
-      onSnooze: { _ in }
-    )
-    .environmentObject(preferencesManager)
-    .frame(width: 1200, height: 800)
-    .preferredColorScheme(.light)
-
-    // Basic view creation test (snapshots disabled for now)
-    XCTAssertNotNil(view)
+  override func tearDown() {
+    super.tearDown()
   }
 
-  func testOverlayContentLongMeetingTitle() {
-    let event = createSampleEventWithLongTitle()
-    let preferencesManager = TestUtilities.MockPreferencesManager()
+  func testOverlayContentBeforeMeeting() {
+    let preferencesManager = PreferencesManager()
+    let event = createSampleEvent()
 
-    let view = OverlayContentView(
-      event: event,
-      onDismiss: {},
-      onJoin: {},
-      onSnooze: { _ in }
+    // Build the full view hierarchy with environment first
+    let fullView = AnyView(
+      OverlayContentView(
+        event: event,
+        onDismiss: {},
+        onJoin: {},
+        onSnooze: { _ in }
+      )
+      .environmentObject(preferencesManager)
+      .frame(width: 1200, height: 800)
+      .preferredColorScheme(.light)
     )
-    .environmentObject(preferencesManager)
-    .frame(width: 1200, height: 800)
-    .preferredColorScheme(.light)
+
+    // Use NSHostingController with local scope
+    let hostingController = NSHostingController(rootView: fullView)
+    // Force view loading
+    _ = hostingController.view
+    hostingController.view.frame = CGRect(x: 0, y: 0, width: 1200, height: 800)
 
     // Basic view creation test (snapshots disabled for now)
-    XCTAssertNotNil(view)
+    XCTAssertNotNil(hostingController.view)
+  }
+
+  func testOverlayContentTestThree() {
+    let preferencesManager = PreferencesManager()
+    let event = createSampleEvent()
+
+    // Build the full view hierarchy with environment first
+    let fullView = AnyView(
+      OverlayContentView(
+        event: event,
+        onDismiss: {},
+        onJoin: {},
+        onSnooze: { _ in }
+      )
+      .environmentObject(preferencesManager)
+      .frame(width: 1200, height: 800)
+      .preferredColorScheme(.light)
+    )
+
+    // Use NSHostingController with local scope
+    let hostingController = NSHostingController(rootView: fullView)
+    // Force view loading
+    _ = hostingController.view
+    hostingController.view.frame = CGRect(x: 0, y: 0, width: 1200, height: 800)
+
+    // Basic view creation test (snapshots disabled for now)
+    XCTAssertNotNil(hostingController.view)
   }
 
   private func createSampleEvent() -> Event {

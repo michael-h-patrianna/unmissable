@@ -345,6 +345,21 @@ class DatabaseManager: ObservableObject {
 
       logger.info("Deleted \(deletedCount) test calendars with pattern: \(pattern)")
     }
+
+    /// Delete events matching a specific title pattern (for testing only)
+    func deleteTestEventsByTitle(withPattern pattern: String) async throws {
+      guard let dbQueue = dbQueue else {
+        throw DatabaseError.notInitialized
+      }
+
+      let deletedCount = try await dbQueue.write { db in
+        try Event
+          .filter(Event.Columns.title.like("%\(pattern)%"))
+          .deleteAll(db)
+      }
+
+      logger.info("Deleted \(deletedCount) test events with title pattern: \(pattern)")
+    }
   #endif
 
   func searchEvents(query: String) async throws -> [Event] {

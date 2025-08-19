@@ -3,17 +3,18 @@ import XCTest
 @testable import Unmissable
 
 @MainActor
-class MeetingDetailsEndToEndTests: XCTestCase {
+class MeetingDetailsEndToEndTests: DatabaseTestCase {
 
   var appState: AppState!
 
   override func setUp() async throws {
-    try await super.setUp()
+    try await super.setUp()  // This calls TestDataCleanup.shared.cleanupAllTestData()
     appState = AppState()
   }
 
   override func tearDown() async throws {
     appState = nil
+    // Cleanup is handled by super.tearDown() which calls TestDataCleanup.shared.cleanupAllTestData()
     try await super.tearDown()
   }
 

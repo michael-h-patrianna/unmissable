@@ -15,6 +15,9 @@ final class SystemIntegrationTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
+    // Clean up any existing test data first
+    try await TestDataCleanup.shared.cleanupAllTestData()
+
     mockPreferences = TestUtilities.MockPreferencesManager()
     mockFocusMode = OverlayTestMockFocusModeManager()
     overlayManager = OverlayManager(
@@ -30,6 +33,9 @@ final class SystemIntegrationTests: XCTestCase {
     eventScheduler.stopScheduling()
     overlayManager.hideOverlay()
     cancellables.removeAll()
+
+    // Clean up test data after each test
+    try await TestDataCleanup.shared.cleanupAllTestData()
 
     eventScheduler = nil
     overlayManager = nil

@@ -67,7 +67,7 @@ class CalendarService: ObservableObject {
       await loadCachedData()
     }
 
-    // Listen for timezone changes
+    // Listen for system timezone changes
     NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)
       .sink { [weak self] _ in
         Task { @MainActor in
@@ -176,10 +176,10 @@ class CalendarService: ObservableObject {
         calendars = cachedCalendars
       }
 
-      // Load upcoming events from database with timezone conversion
+      // Load upcoming events from database
       let cachedEvents = try await databaseManager.fetchUpcomingEvents(limit: 50)
 
-      // Load started meetings from database with timezone conversion
+      // Load started meetings from database
       let cachedStartedEvents = try await databaseManager.fetchStartedMeetings(limit: 20)
 
       // DEBUG: Log what events we're loading for the UI
@@ -201,7 +201,7 @@ class CalendarService: ObservableObject {
       events = cachedEvents.map { timezoneManager.localizedEvent($0) }
       startedEvents = cachedStartedEvents.map { timezoneManager.localizedEvent($0) }
 
-      // DEBUG: Log what events we're setting for the UI after timezone conversion
+      // DEBUG: Log what events we're setting for the UI after mapping
       if let firstUIEvent = events.first {
         print("🔄 CalendarService: First UI event after timezone - \(firstUIEvent.title)")
         print(
@@ -225,9 +225,7 @@ class CalendarService: ObservableObject {
 
   private func handleTimezoneChange() async {
     logger.info("Handling timezone change")
-    timezoneManager.handleTimezoneChange()
-
-    // Reload events with new timezone
+    // Reload events to reflect new system timezone in any formatted strings
     await loadCachedData()
   }
 

@@ -5,6 +5,7 @@ import XCTest
 
 /// Test cases specifically for schedule timer migration validation
 /// These tests focus on the core overlay scheduling timer - the highest risk component
+@MainActor
 class ScheduleTimerMigrationTests: XCTestCase {
 
   var overlayManager: OverlayManager!
@@ -40,15 +41,10 @@ class ScheduleTimerMigrationTests: XCTestCase {
       let adjustedEvent = Event(
         id: event.id,
         title: event.title,
-        description: event.description,
         startDate: Date().addingTimeInterval(TimeInterval(delay + 2)),  // +2 for buffer
         endDate: event.endDate,
-        location: event.location,
-        isAllDay: event.isAllDay,
-        attendees: event.attendees,
         calendarId: event.calendarId,
-        primaryLink: event.primaryLink,
-        additionalLinks: event.additionalLinks
+        timezone: event.timezone
       )
 
       let expectation = TimerMigrationTestHelpers.createTimerExpectation(
@@ -59,28 +55,31 @@ class ScheduleTimerMigrationTests: XCTestCase {
 
       // Monitor for overlay appearance
       var overlayAppeared = false
-      let observer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-        if self.overlayManager.isOverlayVisible && !overlayAppeared {
-          overlayAppeared = true
-          timer.invalidate()
+      let observer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) {
+        [weak overlayManager] timer in
+        Task { @MainActor in
+          if let overlayManager, overlayManager.isOverlayVisible && !overlayAppeared {
+            overlayAppeared = true
+            timer.invalidate()
 
-          let actualTriggerTime = Date()
-          let expectedTriggerTime = scheduleStartTime.addingTimeInterval(TimeInterval(delay))
+            let actualTriggerTime = Date()
+            let expectedTriggerTime = scheduleStartTime.addingTimeInterval(TimeInterval(delay))
 
-          TimerMigrationTestHelpers.logTimingMetrics(
-            operation: "Schedule \(delay)s",
-            expected: expectedTriggerTime,
-            actual: actualTriggerTime,
-            tolerance: TimerMigrationTestHelpers.ScheduleTimer.tolerance
-          )
+            TimerMigrationTestHelpers.logTimingMetrics(
+              operation: "Schedule \(delay)s",
+              expected: expectedTriggerTime,
+              actual: actualTriggerTime,
+              tolerance: TimerMigrationTestHelpers.ScheduleTimer.tolerance
+            )
 
-          TimerMigrationTestHelpers.validateTimerAccuracy(
-            expected: expectedTriggerTime,
-            actual: actualTriggerTime,
-            tolerance: TimerMigrationTestHelpers.ScheduleTimer.tolerance
-          )
+            TimerMigrationTestHelpers.validateTimerAccuracy(
+              expected: expectedTriggerTime,
+              actual: actualTriggerTime,
+              tolerance: TimerMigrationTestHelpers.ScheduleTimer.tolerance
+            )
 
-          expectation.fulfill()
+            expectation.fulfill()
+          }
         }
       }
 
@@ -122,15 +121,9 @@ class ScheduleTimerMigrationTests: XCTestCase {
       let event = Event(
         id: "multi-test-\(i)",
         title: "Multi Schedule Test \(i)",
-        description: "Test event \(i)",
         startDate: Date().addingTimeInterval(TimeInterval(delay + 2)),
         endDate: Date().addingTimeInterval(TimeInterval(delay + 1800)),
-        location: "Test Location \(i)",
-        isAllDay: false,
-        attendees: [],
-        calendarId: "test-calendar",
-        primaryLink: nil,
-        additionalLinks: []
+        calendarId: "test-calendar"
       )
 
       events.append(event)
@@ -139,20 +132,20 @@ class ScheduleTimerMigrationTests: XCTestCase {
 
     // Monitor for overlay appearances
     var triggeredEvents: Set<String> = []
-    let observer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-      if self.overlayManager.isOverlayVisible {
-        if let activeEvent = self.overlayManager.activeEvent,
-          !triggeredEvents.contains(activeEvent.id)
-        {
-          triggeredEvents.insert(activeEvent.id)
-          actualTriggers.append(Date())
-
-          print("🔥 SCHEDULE TRIGGER: \(activeEvent.title) at \(Date())")
-
-          expectation.fulfill()
-
-          // Hide overlay to allow next one to appear
-          self.overlayManager.hideOverlay()
+    let observer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) {
+      [weak overlayManager] timer in
+      Task { @MainActor in
+        guard let overlayManager else { return }
+        if overlayManager.isOverlayVisible {
+          if let activeEvent = overlayManager.activeEvent,
+            !triggeredEvents.contains(activeEvent.id)
+          {
+            triggeredEvents.insert(activeEvent.id)
+            actualTriggers.append(Date())
+            print("🔥 SCHEDULE TRIGGER: \(activeEvent.title) at \(Date())")
+            expectation.fulfill()
+            overlayManager.hideOverlay()
+          }
         }
       }
     }
@@ -196,15 +189,10 @@ class ScheduleTimerMigrationTests: XCTestCase {
     let adjustedEvent1 = Event(
       id: event1.id,
       title: event1.title,
-      description: event1.description,
       startDate: Date().addingTimeInterval(7),  // 5 seconds for trigger + 2 min buffer
       endDate: event1.endDate,
-      location: event1.location,
-      isAllDay: event1.isAllDay,
-      attendees: event1.attendees,
       calendarId: event1.calendarId,
-      primaryLink: event1.primaryLink,
-      additionalLinks: event1.additionalLinks
+      timezone: event1.timezone
     )
 
     // Schedule first overlay
@@ -223,15 +211,10 @@ class ScheduleTimerMigrationTests: XCTestCase {
     let adjustedEvent2 = Event(
       id: event2.id,
       title: event2.title,
-      description: event2.description,
       startDate: Date().addingTimeInterval(5),  // 3 seconds from now + 2 min buffer
       endDate: event2.endDate,
-      location: event2.location,
-      isAllDay: event2.isAllDay,
-      attendees: event2.attendees,
       calendarId: event2.calendarId,
-      primaryLink: event2.primaryLink,
-      additionalLinks: event2.additionalLinks
+      timezone: event2.timezone
     )
 
     overlayManager.scheduleOverlay(for: adjustedEvent2, minutesBeforeMeeting: 2)
@@ -241,7 +224,6 @@ class ScheduleTimerMigrationTests: XCTestCase {
 
     // Check if any overlay appeared
     if overlayManager.isOverlayVisible {
-      // If an overlay appeared, it should be the second event
       XCTAssertEqual(overlayManager.activeEvent?.id, "second-event")
     }
 
@@ -263,15 +245,9 @@ class ScheduleTimerMigrationTests: XCTestCase {
       let event = Event(
         id: "memory-test-\(i)",
         title: "Memory Test Event \(i)",
-        description: "Memory test",
-        startDate: Date().addingTimeInterval(TimeInterval(60 + i)),  // Spread over 100 seconds
+        startDate: Date().addingTimeInterval(TimeInterval(60 + i)),
         endDate: Date().addingTimeInterval(TimeInterval(60 + i + 1800)),
-        location: "Test",
-        isAllDay: false,
-        attendees: [],
-        calendarId: "test",
-        primaryLink: nil,
-        additionalLinks: []
+        calendarId: "test"
       )
       events.append(event)
     }
@@ -313,15 +289,9 @@ class ScheduleTimerMigrationTests: XCTestCase {
     let pastEvent = Event(
       id: "past-event",
       title: "Past Event",
-      description: "Event in the past",
-      startDate: Date().addingTimeInterval(-3600),  // 1 hour ago
-      endDate: Date().addingTimeInterval(-1800),  // 30 minutes ago
-      location: "Past Location",
-      isAllDay: false,
-      attendees: [],
-      calendarId: "test",
-      primaryLink: nil,
-      additionalLinks: []
+      startDate: Date().addingTimeInterval(-3600),
+      endDate: Date().addingTimeInterval(-1800),
+      calendarId: "test"
     )
 
     // Attempt to schedule past event
@@ -348,15 +318,9 @@ class ScheduleTimerMigrationTests: XCTestCase {
     let event = Event(
       id: "precision-test",
       title: "Precision Test Event",
-      description: "Test",
-      startDate: Date().addingTimeInterval(7),  // 5 seconds + 2 min buffer
+      startDate: Date().addingTimeInterval(7),
       endDate: Date().addingTimeInterval(1807),
-      location: "Test",
-      isAllDay: false,
-      attendees: [],
-      calendarId: "test",
-      primaryLink: nil,
-      additionalLinks: []
+      calendarId: "test"
     )
 
     let expectation = TimerMigrationTestHelpers.createTimerExpectation(
@@ -365,21 +329,20 @@ class ScheduleTimerMigrationTests: XCTestCase {
 
     let scheduleTime = Date()
 
-    let observer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-      if self.overlayManager.isOverlayVisible {
-        timer.invalidate()
-
-        let actualTime = Date()
-        let expectedTime = scheduleTime.addingTimeInterval(5)
-
-        // Under load, allow slightly higher tolerance
-        TimerMigrationTestHelpers.validateTimerAccuracy(
-          expected: expectedTime,
-          actual: actualTime,
-          tolerance: 2.0  // 2 second tolerance under load
-        )
-
-        expectation.fulfill()
+    let observer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) {
+      [weak overlayManager] timer in
+      Task { @MainActor in
+        if let overlayManager, overlayManager.isOverlayVisible {
+          timer.invalidate()
+          let actualTime = Date()
+          let expectedTime = scheduleTime.addingTimeInterval(5)
+          TimerMigrationTestHelpers.validateTimerAccuracy(
+            expected: expectedTime,
+            actual: actualTime,
+            tolerance: 2.0
+          )
+          expectation.fulfill()
+        }
       }
     }
 

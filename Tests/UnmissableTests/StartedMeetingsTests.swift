@@ -3,27 +3,19 @@ import XCTest
 @testable import Unmissable
 
 @MainActor
-final class StartedMeetingsTests: XCTestCase {
+final class StartedMeetingsTests: DatabaseTestCase {
   var databaseManager: DatabaseManager!
 
   override func setUp() async throws {
-    try await super.setUp()
+    try await super.setUp()  // This calls TestDataCleanup.shared.cleanupAllTestData()
 
     // Use the shared instance for testing
     databaseManager = DatabaseManager.shared
-
-    // Clean up any existing test data with broader patterns
-    try await databaseManager.deleteTestEvents(withIdPattern: "started-test")
-    try await databaseManager.deleteTestEvents(withIdPattern: "test")
-    try await databaseManager.deleteTestEvents(withIdPattern: "db-test")
   }
 
   override func tearDown() async throws {
-    // Clean up test data with broader patterns
-    try await databaseManager.deleteTestEvents(withIdPattern: "started-test")
-    try await databaseManager.deleteTestEvents(withIdPattern: "test")
-    try await databaseManager.deleteTestEvents(withIdPattern: "db-test")
-
+    databaseManager = nil
+    // Cleanup is handled by super.tearDown() which calls TestDataCleanup.shared.cleanupAllTestData()
     try await super.tearDown()
   }
 

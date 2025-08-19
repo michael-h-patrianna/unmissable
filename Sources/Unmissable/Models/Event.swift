@@ -65,7 +65,26 @@ struct Event: Identifiable, Codable, Equatable {
   }
 
   var primaryLink: URL? {
-    links.first
+    // Prioritize Google Meet video links over other types (like dial-in numbers)
+    if let meetLink = links.first(where: { url in
+      let urlString = url.absoluteString.lowercased()
+      return urlString.contains("meet.google.com") && urlString.hasPrefix("https://")
+    }) {
+      return meetLink
+    }
+
+    // Fallback to other video meeting providers
+    if let videoLink = links.first(where: { url in
+      let urlString = url.absoluteString.lowercased()
+      return urlString.contains("zoom.us") || urlString.contains("teams.microsoft.com")
+        || urlString.contains("webex.com")
+        || (urlString.hasPrefix("https://") && !urlString.hasPrefix("tel:"))
+    }) {
+      return videoLink
+    }
+
+    // Fallback to any link if no video meeting links found
+    return links.first
   }
 
   var isOnlineMeeting: Bool {
@@ -85,15 +104,13 @@ struct Event: Identifiable, Codable, Equatable {
   }
 
   var localStartDate: Date {
-    let timeZone = TimeZone(identifier: timezone) ?? TimeZone.current
-    let offset = timeZone.secondsFromGMT(for: startDate)
-    return startDate.addingTimeInterval(TimeInterval(offset))
+    // Keep absolute instant; use DateFormatter with desired timeZone for display
+    return startDate
   }
 
   var localEndDate: Date {
-    let timeZone = TimeZone(identifier: timezone) ?? TimeZone.current
-    let offset = timeZone.secondsFromGMT(for: endDate)
-    return endDate.addingTimeInterval(TimeInterval(offset))
+    // Keep absolute instant; use DateFormatter with desired timeZone for display
+    return endDate
   }
 
   // Helper method to create event with parsed Google Meet links

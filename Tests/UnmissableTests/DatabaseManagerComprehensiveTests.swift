@@ -4,37 +4,20 @@ import XCTest
 @testable import Unmissable
 
 @MainActor
-final class DatabaseManagerComprehensiveTests: XCTestCase {
+final class DatabaseManagerComprehensiveTests: DatabaseTestCase {
 
   var databaseManager: DatabaseManager!
 
   override func setUp() async throws {
-    try await super.setUp()
+    try await super.setUp()  // This calls TestDataCleanup.shared.cleanupAllTestData()
 
     // Use the shared instance for testing
     databaseManager = DatabaseManager.shared
-
-    // Clean up any existing test data
-    try await cleanupTestData()
   }
 
   override func tearDown() async throws {
-    // Clean up test data
-    try await cleanupTestData()
-
+    // Cleanup is handled by super.tearDown() which calls TestDataCleanup.shared.cleanupAllTestData()
     try await super.tearDown()
-  }
-
-  private func cleanupTestData() async throws {
-    // Clean up test events by pattern
-    try await databaseManager.deleteTestEvents(withIdPattern: "perf-test")
-    try await databaseManager.deleteTestEvents(withIdPattern: "memory-test")
-    try await databaseManager.deleteTestEvents(withIdPattern: "fetch-perf")
-    try await databaseManager.deleteTestEvents(withIdPattern: "test-save")
-    try await databaseManager.deleteTestEvents(withIdPattern: "test-event")
-
-    // Clean up test calendars
-    try await databaseManager.deleteTestCalendars(withNamePattern: "Test Calendar")
   }
 
   // MARK: - Basic Event Operations Tests

@@ -38,6 +38,9 @@ let package = Package(
         .product(name: "Magnet", package: "Magnet"),
       ],
       path: "Sources/Unmissable",
+      exclude: [
+        "Config/Config.plist.example"
+      ],
       resources: [
         .process("Resources")
       ]

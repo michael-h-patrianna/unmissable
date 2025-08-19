@@ -8,59 +8,23 @@ class TimezoneManager {
 
   private init() {}
 
-  // MARK: - Timezone Conversion
-
-  func convertToLocalTime(_ date: Date, from timezone: String) -> Date {
-    guard let sourceTimezone = TimeZone(identifier: timezone) else {
-      logger.warning("Invalid timezone identifier: \(timezone), using system timezone")
-      return date
-    }
-
-    let localTimezone = TimeZone.current
-
-    // Calculate the difference between source and local timezone
-    let sourceOffset = sourceTimezone.secondsFromGMT(for: date)
-    let localOffset = localTimezone.secondsFromGMT(for: date)
-    let difference = localOffset - sourceOffset
-
-    return date.addingTimeInterval(TimeInterval(difference))
-  }
-
-  func convertFromLocalTime(_ date: Date, to timezone: String) -> Date {
-    guard let targetTimezone = TimeZone(identifier: timezone) else {
-      logger.warning("Invalid timezone identifier: \(timezone), using system timezone")
-      return date
-    }
-
-    let localTimezone = TimeZone.current
-
-    // Calculate the difference between local and target timezone
-    let localOffset = localTimezone.secondsFromGMT(for: date)
-    let targetOffset = targetTimezone.secondsFromGMT(for: date)
-    let difference = targetOffset - localOffset
-
-    return date.addingTimeInterval(TimeInterval(difference))
-  }
-
   // MARK: - Event Timezone Handling
 
+  /// Preserve absolute timestamps; only presentation (formatting) should apply time zones.
   func localizedEvent(_ event: Event) -> Event {
-    let localStartDate = convertToLocalTime(event.startDate, from: event.timezone)
-    let localEndDate = convertToLocalTime(event.endDate, from: event.timezone)
-
     return Event(
       id: event.id,
       title: event.title,
-      startDate: localStartDate,
-      endDate: localEndDate,
+      startDate: event.startDate,
+      endDate: event.endDate,
       organizer: event.organizer,
-      description: event.description,  // ✅ FIX: Copy description
-      location: event.location,  // ✅ FIX: Copy location
-      attendees: event.attendees,  // ✅ FIX: Copy attendees
-      attachments: event.attachments,  // ✅ NEW: Copy attachments
+      description: event.description,
+      location: event.location,
+      attendees: event.attendees,
+      attachments: event.attachments,
       isAllDay: event.isAllDay,
       calendarId: event.calendarId,
-      timezone: TimeZone.current.identifier,  // Convert to local timezone
+      timezone: event.timezone,  // keep original tz metadata
       links: event.links,
       provider: event.provider,
       snoozeUntil: event.snoozeUntil,
@@ -73,13 +37,11 @@ class TimezoneManager {
   // MARK: - Alert Timing
 
   func calculateAlertTime(for event: Event, minutesBefore: Int) -> Date {
-    let alertDate = event.startDate.addingTimeInterval(-TimeInterval(minutesBefore * 60))
-    return convertToLocalTime(alertDate, from: event.timezone)
+    return event.startDate.addingTimeInterval(-TimeInterval(minutesBefore * 60))
   }
 
   func timeUntilEvent(_ event: Event) -> TimeInterval {
-    let localStartTime = convertToLocalTime(event.startDate, from: event.timezone)
-    return localStartTime.timeIntervalSinceNow
+    return event.startDate.timeIntervalSinceNow
   }
 
   func isEventStartingSoon(_ event: Event, within minutes: Int) -> Bool {
@@ -91,12 +53,7 @@ class TimezoneManager {
   // MARK: - Timezone Information
 
   func getTimezoneDisplayName(_ timezone: String) -> String {
-    guard let tz = TimeZone(identifier: timezone) else {
-      return timezone
-    }
-
-    let formatter = DateFormatter()
-    formatter.timeZone = tz
+    guard let tz = TimeZone(identifier: timezone) else { return timezone }
     return tz.localizedName(for: .shortStandard, locale: .current) ?? timezone
   }
 
@@ -125,9 +82,8 @@ class TimezoneManager {
         let tzName = getTimezoneDisplayName(event.timezone)
         return "\(timeString) \(tzName)"
       } else {
-        // Use local timezone for display
-        let localStartDate = convertToLocalTime(event.startDate, from: event.timezone)
-        return formatter.string(from: localStartDate)
+        formatter.timeZone = .current
+        return formatter.string(from: event.startDate)
       }
     }
   }
@@ -136,9 +92,7 @@ class TimezoneManager {
     let now = Date()
     let interval = date.timeIntervalSince(now)
 
-    if interval < 0 {
-      return "Past"
-    }
+    if interval < 0 { return "Past" }
 
     let minutes = Int(interval / 60)
     let hours = minutes / 60
@@ -156,20 +110,6 @@ class TimezoneManager {
   }
 
   // MARK: - System Timezone Changes
-
-  func handleTimezoneChange() {
-    logger.info("System timezone changed to: \(TimeZone.current.identifier)")
-
-    // Post notification for other components to handle timezone change
-    NotificationCenter.default.post(
-      name: .NSSystemTimeZoneDidChange,
-      object: nil
-    )
-  }
 }
 
-// MARK: - Notification Names
-
-extension Notification.Name {
-  static let timezoneChanged = Notification.Name("com.unmissable.timezoneChanged")
-}
+// Intentionally no custom timezone change notifications; rely on NSSystemTimeZoneDidChange.

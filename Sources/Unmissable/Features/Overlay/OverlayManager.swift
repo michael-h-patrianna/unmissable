@@ -39,7 +39,10 @@ class OverlayManager: ObservableObject, OverlayManaging {
     self.soundManager = SoundManager(preferencesManager: preferencesManager)
     self.focusModeManager =
       focusModeManager ?? FocusModeManager(preferencesManager: preferencesManager)
-    self.isTestMode = isTestMode
+    // Auto-detect XCTest environment to avoid creating real windows during tests
+    let isRunningUnderXCTest =
+      ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    self.isTestMode = isTestMode || isRunningUnderXCTest
   }
 
   convenience init() {
@@ -132,6 +135,7 @@ class OverlayManager: ObservableObject, OverlayManaging {
     // CRITICAL FIX: Clear state immediately to prevent any race conditions
     activeEvent = nil
     isOverlayVisible = false
+    timeUntilMeeting = 0
     isSnoozedAlert = false  // SNOOZE FIX: Reset snooze flag
 
     // CRITICAL FIX: Close windows on background queue to avoid Window Server deadlock
@@ -193,6 +197,14 @@ class OverlayManager: ObservableObject, OverlayManaging {
       "🎯 SCHEDULE: Event '\(event.title)' should trigger in \(timeUntilShow)s (showTime: \(showTime), current: \(Date()))"
     )
 
+    // If the scheduled show time is now or has just passed, show immediately instead of skipping
+    if timeUntilShow <= 0.5 {
+      logger.info(
+        "⚡️ IMMEDIATE SHOW: timeUntilShow=\(timeUntilShow), showing overlay now for \(event.title)")
+      showOverlay(for: event, minutesBeforeMeeting: minutesBeforeMeeting, fromSnooze: false)
+      return
+    }
+
     if timeUntilShow > 0 {
       logger.info("✅ SCHEDULING: Task-based overlay for \(event.title) in \(timeUntilShow) seconds")
 
@@ -219,10 +231,6 @@ class OverlayManager: ObservableObject, OverlayManaging {
       }
 
       logger.info("📝 TASK SCHEDULED: Schedule task created for \(event.title)")
-    } else {
-      logger.warning(
-        "⚠️ SKIP: Event \(event.title) starts too soon to schedule overlay (timeUntilShow: \(timeUntilShow))"
-      )
     }
   }
 

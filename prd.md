@@ -76,7 +76,7 @@ All dependencies are working and integrated:
 - **OAuth2 Authentication**: Complete with PKCE, token refresh, Keychain storage
 - **Calendar Selection**: Multi-calendar support with user preferences
 - **Event Synchronization**: Polling every 60s (configurable 15-300s)
-- **Timezone Handling**: Automatic conversion to system timezone
+- **Timezone Handling**: Preserve absolute Date values; use event-provided timezone only for display formatting (no conversion of timestamps)
 - **Offline Support**: 24-hour event cache with graceful degradation
 
 #### Meeting Detection & Link Parsing
@@ -206,7 +206,7 @@ struct ScheduledAlert: Identifiable {
 ## Testing Strategy (Implemented)
 
 ### Unit Tests
-- **Event Processing**: Timezone conversion, validation
+- **Event Processing**: Timezone metadata preservation, formatting, and validation (no timestamp conversion)
 - **Link Parsing**: Provider detection across URL patterns
 - **Preference Logic**: Validation and persistence
 - **Database Operations**: CRUD and migration scenarios
